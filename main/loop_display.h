@@ -1,0 +1,35 @@
+#ifndef PAPER_E6_LOOP_DISPLAY_H
+#define PAPER_E6_LOOP_DISPLAY_H
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Start the single display-worker task.  Idempotent.
+int loop_display_start(void);
+
+// Async: ask the worker to refresh the panel with /sdcard/photos/<name>.
+// Returns 0 if queued, -1 if the queue is full.
+int loop_display_request_show(const char *name);
+
+// Async: ask the worker to advance to the next photo in the directory.
+int loop_display_request_next(void);
+
+// Async: paint the entire panel with a single ink (ink_code is the panel's
+// 4-bit code: 0=black 1=white 2=yellow 3=red 5=blue 6=green).  Used by the
+// calibration wizard so the user has a full-screen reference to match
+// against.  Returns 0 if queued.
+int loop_display_request_fill(uint8_t ink_code);
+
+// Block the calling thread until the worker is currently idle (the panel is
+// holding the last image and no command is in flight).  Useful before a
+// shutdown.
+void loop_display_wait_idle(void);
+
+#ifdef __cplusplus
+}
+#endif
+#endif

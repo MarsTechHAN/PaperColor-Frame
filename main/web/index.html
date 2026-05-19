@@ -1,0 +1,2465 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>PaperE6 Photos</title>
+<style>
+:root {
+  --paper: #FAFAF7;
+  --ink: #000;
+  --ink-2: #222;
+  --ink-3: #555;
+  --ink-4: #888;
+  --rule: #D5D5D5;
+  --margin: 20px;
+  --hairline: 1px;
+  --rule-h: 2px;
+
+  --t-title: 30px;
+  --t-row: 19px;
+  --t-input: 20px;
+  --t-note: 16px;
+  --t-meta: 16px;
+  --t-button: 15px;
+  --t-status: 13px;
+  --t-utility: 11px;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--paper); color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC", "Hiragino Sans GB", sans-serif;
+  font-feature-settings: "tnum" 1, "kern" 1;
+  font-weight: 400;
+  font-size: var(--t-row);
+  line-height: 1.32;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+button { font: inherit; color: inherit; background: transparent;
+  border: 0; padding: 0; cursor: pointer; }
+
+/* utility row above wordmark — BLE-dot equivalent + settings */
+.paper-utility {
+  display: flex; align-items: center; justify-content: space-between;
+  min-height: 22px;
+  padding: 6px var(--margin) 0 var(--margin);
+  font-size: var(--t-utility);
+  color: var(--ink-3);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.paper-utility__left { display: flex; align-items: center; gap: 8px; }
+.paper-utility__right { display: flex; align-items: center; gap: 14px; }
+.paper-utility .dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--ink);
+}
+
+/* big PHOTOS wordmark */
+.paper-wordmark {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 8px var(--margin) 3px var(--margin);
+}
+.paper-wordmark__title {
+  font-size: var(--t-title);
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+.paper-wordmark__meta {
+  font-size: var(--t-meta);
+  font-feature-settings: "tnum" 1;
+}
+
+.paper-rule--thick {
+  height: var(--rule-h);
+  background: transparent;
+  margin: 6px var(--margin) 0 var(--margin);
+}
+.paper-rule--hair {
+  height: var(--hairline);
+  background: var(--rule);
+  margin: 0 var(--margin);
+}
+
+/* photo grid */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 12px;
+  padding: 16px var(--margin) 28px var(--margin);
+}
+.tile {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  background: #EEE;
+  overflow: hidden;
+  cursor: pointer;
+}
+.tile img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.tile.is-active::after {
+  content: "";
+  position: absolute; inset: 0;
+  border: 2px solid var(--ink);
+  pointer-events: none;
+}
+.tile__caption {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 4px 6px;
+  font-size: var(--t-utility);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--paper);
+  background: rgba(0,0,0,0.55);
+  display: flex; justify-content: space-between; align-items: baseline;
+  pointer-events: none;
+}
+
+/* empty state */
+.paper-empty {
+  padding: 60px var(--margin);
+  color: var(--ink-3);
+  font-size: var(--t-note);
+  letter-spacing: 0.02em;
+}
+
+/* bottom action bar — sticky toolbar with text-only buttons */
+.paper-bar {
+  position: sticky; bottom: 0;
+  background: var(--paper);
+  border-top: var(--rule-h) solid var(--ink);
+  display: flex; justify-content: space-between; align-items: stretch;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.paper-bar button {
+  flex: 1;
+  padding: 16px 0;
+  font-size: var(--t-button);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-right: var(--hairline) solid var(--rule);
+}
+.paper-bar button:last-child { border-right: 0; }
+.paper-bar button:disabled { color: var(--ink-4); cursor: default; }
+
+/* full-screen modal overlay (upload, detail, settings) */
+.sheet {
+  position: fixed; inset: 0;
+  background: var(--paper);
+  display: none;
+  flex-direction: column;
+  z-index: 10;
+}
+.sheet.is-open { display: flex; }
+.sheet__head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px var(--margin);
+  border-bottom: var(--rule-h) solid var(--ink);
+}
+.sheet__title {
+  font-size: var(--t-row);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.sheet__close {
+  font-size: var(--t-row);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.sheet__body {
+  flex: 1;
+  overflow: auto;
+}
+.sheet__foot {
+  border-top: var(--rule-h) solid var(--ink);
+  display: flex;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.sheet__foot button {
+  flex: 1;
+  padding: 16px 0;
+  font-size: var(--t-button);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-right: var(--hairline) solid var(--rule);
+}
+.sheet__foot button:last-child { border-right: 0; }
+.sheet__foot button.is-primary { background: var(--ink); color: var(--paper); }
+.sheet__foot button:disabled { color: var(--ink-4); cursor: default; }
+
+/* crop / rotate stage */
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  background: var(--ink);
+  touch-action: none;
+  user-select: none;
+}
+.stage canvas {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform-origin: 0 0;
+  /* set by JS via transform */
+}
+.stage__mask {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  /* dimensions set by JS to maintain 2:3 aspect and fit viewport */
+  box-shadow: 0 0 0 9999px rgba(250,250,247,0.85);
+  outline: 1px solid var(--ink);
+}
+.stage__hint {
+  position: absolute; left: 0; right: 0; bottom: 12px;
+  text-align: center;
+  font-size: var(--t-utility);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
+/* settings rows */
+.row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px var(--margin);
+  border-bottom: var(--hairline) solid var(--rule);
+}
+.row__label {
+  font-size: var(--t-row);
+  letter-spacing: 0.04em;
+}
+.row__value {
+  font-size: var(--t-meta);
+  color: var(--ink-3);
+  font-feature-settings: "tnum" 1;
+}
+.row input[type=range] {
+  width: 60%;
+  accent-color: var(--ink);
+}
+
+/* detail sheet image preview */
+.detail__img {
+  flex: 1; min-height: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--ink);
+  padding: 20px;
+}
+.detail__img img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  background: var(--paper);
+}
+
+/* per-image adjustment panel inside the upload sheet */
+.adjust-panel {
+  border-top: var(--hairline) solid var(--rule);
+  background: var(--paper);
+  max-height: 50%;
+  overflow-y: auto;
+}
+.adjust-panel > summary {
+  list-style: none;
+  padding: 12px var(--margin);
+  font-size: var(--t-row);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.adjust-panel > summary::after {
+  content: " ▾";
+  color: var(--ink-3);
+}
+.adjust-panel[open] > summary::after { content: " ▴"; }
+.adjust-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px 0;
+  padding: 0 var(--margin) 14px;
+}
+.adjust-grid label {
+  display: flex;
+  justify-content: flex-start;
+  font-size: var(--t-meta);
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  padding: 6px 0 0;
+}
+.adjust-grid label span {
+  font-feature-settings: "tnum" 1;
+  color: var(--ink);
+}
+.adjust-grid input[type=range] {
+  width: 100%;
+  accent-color: var(--ink);
+}
+.adjust-grid button {
+  margin-top: 10px;
+  padding: 10px;
+  background: transparent;
+  border: var(--hairline) solid var(--ink);
+  font-size: var(--t-utility);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+/* Stage tools — a single horizontal band right below the cropping stage
+   that holds the live preview and the cropping-side buttons (Rotate, Fit).
+   Sits above the adjust panel so it's always visible during cropping.
+   Tap the preview canvas itself to toggle source ↔ dithered — no separate
+   button needed. */
+.crop-actions {
+  display: flex;
+  gap: 10px;
+  padding: 10px var(--margin);
+  border-top: var(--hairline) solid var(--rule);
+  background: var(--paper);
+}
+.crop-actions button {
+  flex: 1;
+  padding: 12px;
+  background: transparent;
+  border: var(--hairline) solid var(--ink);
+  font-size: var(--t-utility);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.stage-tools {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  padding: 10px var(--margin);
+  border-top: var(--hairline) solid var(--rule);
+  background: var(--paper);
+}
+.stage-tools canvas {
+  width: min(46vw, 180px);
+  height: min(69vw, 270px);
+  background: var(--paper-3, #ddd);
+  border: var(--hairline) solid var(--rule);
+  flex: 0 0 auto;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.stage-tools__buttons {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  flex: 1 1 auto;
+  font-size: var(--t-meta);
+  color: var(--ink-3);
+}
+.stage-tools__btnrow {
+  display: flex;
+  gap: 10px;
+}
+.stage-tools__btnrow button {
+  flex: 1;
+  padding: 10px;
+  background: transparent;
+  border: var(--hairline) solid var(--ink);
+  font-size: var(--t-utility);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+#preview-status { letter-spacing: 0.04em; padding: 2px 0; }
+#sheet-upload.upload-crop .adjust-step { display: none; }
+#sheet-upload.upload-adjust .crop-step { display: none; }
+#sheet-upload.upload-adjust .sheet__body {
+  gap: 0;
+  overflow: hidden;
+}
+#sheet-upload.upload-adjust .stage-tools {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 8px var(--margin) 6px;
+}
+.adjust-preview-box {
+  height: var(--adjust-preview-h, min(50dvh, 390px));
+  min-height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--paper-2);
+  border: var(--hairline) solid var(--rule);
+  overflow: hidden;
+}
+#sheet-upload.upload-adjust .stage-tools canvas {
+  height: min(100%, calc((100vw - 2 * var(--margin)) * 1.5));
+  width: auto;
+  aspect-ratio: 2 / 3;
+  background: var(--paper);
+}
+#sheet-upload.upload-adjust .adjust-panel {
+  flex: 0 0 auto;
+  min-height: 0;
+  max-height: none;
+  border-top: var(--hairline) solid var(--rule);
+  background: var(--paper);
+  overflow: auto;
+}
+#sheet-upload.upload-adjust .adjust-panel[open] {
+  flex: 1 1 auto;
+}
+#sheet-upload.upload-adjust .adjust-panel summary {
+  padding: 10px var(--margin);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: var(--t-utility);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  list-style: none;
+}
+#sheet-upload.upload-adjust .adjust-panel summary::-webkit-details-marker { display: none; }
+#sheet-upload.upload-adjust .adjust-panel summary::after {
+  content: "Advanced manual controls";
+  display: block;
+  margin-top: 3px;
+  color: var(--ink-3);
+  font-size: var(--t-meta);
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+#sheet-upload.upload-adjust .adjust-panel[open] summary::after {
+  content: "Auto remains the default; changes here override the current preset";
+}
+.preset-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  padding: 8px 0 10px;
+}
+.stage-tools .preset-row { padding: 0; }
+.adjust-splitter {
+  height: 18px;
+  border-top: var(--hairline) solid var(--rule);
+  border-bottom: var(--hairline) solid var(--rule);
+  background: linear-gradient(to bottom, transparent 7px, var(--ink-4) 7px, var(--ink-4) 10px, transparent 10px);
+  cursor: ns-resize;
+  touch-action: none;
+}
+.preset-row select, .preset-row button {
+  padding: 10px;
+  border: var(--hairline) solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--t-utility);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+#btn-upload-back { display: none; }
+#btn-send { display: none; }
+#sheet-upload.upload-adjust #btn-upload-back,
+#sheet-upload.upload-adjust #btn-send { display: inline-block; }
+#sheet-upload.upload-adjust #btn-upload-next { display: none; }
+#sheet-upload.upload-crop #btn-upload-next { display: inline-block; }
+
+/* Custom drag-only slider.  Replaces <input type="range"> so:
+   (a) only pointerdown on the thumb starts a value change — clicking the
+       track is a no-op (kills the "误触" jump-to-position behaviour);
+   (b) we can give the row a generous right-edge gutter so reaching past
+       the end toward Send doesn't graze the slider. */
+.slider {
+  position: relative;
+  /* Outer padding gives:
+       - 14px on the left so the thumb at value=min has room
+       - 56px on the right as the "safety gutter" (≈ thumb width × 2.5).
+         Phones with edge-grip rejection still allow drags here; we just
+         want a deliberate buffer between the slider and the screen edge. */
+  padding: 4px 56px 4px 14px;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: pan-y;        /* allow vertical page scroll, block horizontal */
+}
+.slider__inner {
+  position: relative;
+  height: 28px;
+}
+.slider__track {
+  position: absolute;
+  top: 50%; left: 0; right: 0;
+  height: 2px;
+  transform: translateY(-50%);
+  background: var(--ink-4);
+}
+.slider__fill {
+  position: absolute;
+  top: 50%; left: 0;
+  width: 50%;     /* set inline by JS */
+  height: 2px;
+  transform: translateY(-50%);
+  background: var(--ink);
+  pointer-events: none;
+}
+.slider__thumb {
+  position: absolute;
+  top: 50%; left: 50%;     /* left set inline by JS */
+  width: 40px; height: 40px;
+  transform: translate(-50%, -50%);
+  background: transparent;
+  border-radius: 50%;
+  cursor: grab;
+  touch-action: none;       /* take over all touch on the thumb */
+}
+.slider__thumb::after {
+  content: "";
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 22px; height: 22px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--ink);
+}
+.slider__thumb.is-dragging { cursor: grabbing; }
+
+/* calibration wizard */
+.calib-progress {
+  display: flex;
+  gap: 6px;
+  padding: 14px var(--margin) 8px;
+}
+.calib-progress span {
+  flex: 1;
+  height: 4px;
+  background: var(--ink-4);
+}
+.calib-progress span.is-done   { background: var(--ink-2); }
+.calib-progress span.is-active { background: var(--ink); }
+
+.calib-instructions {
+  padding: 0 var(--margin) 10px;
+  font-size: var(--t-meta);
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+
+.calib-actions {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px var(--margin);
+}
+.calib-actions button {
+  padding: 10px 14px;
+  background: transparent;
+  border: var(--hairline) solid var(--ink);
+  font-size: var(--t-utility);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.calib-actions__hint {
+  font-size: var(--t-meta);
+  color: var(--ink-3);
+}
+
+.calib-swatch-big {
+  height: 160px;
+  margin: 12px var(--margin);
+  border: 1px solid var(--ink);
+}
+
+.calib-sliders {
+  display: grid; grid-template-columns: 1fr;
+  gap: 2px;
+  padding: 6px var(--margin);
+}
+.calib-sliders label {
+  display: flex; justify-content: space-between;
+  font-size: var(--t-meta);
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  padding-top: 8px;
+}
+.calib-sliders label span {
+  color: var(--ink);
+  font-feature-settings: "tnum" 1;
+}
+.calib-sliders input[type=range] {
+  width: 100%;
+  accent-color: var(--ink);
+}
+
+.calib-readout {
+  padding: 10px var(--margin) 18px;
+  text-align: center;
+  font-size: var(--t-meta);
+  font-feature-settings: "tnum" 1;
+  color: var(--ink-3);
+}
+
+/* toast */
+.toast {
+  position: fixed; left: 50%; bottom: 80px;
+  transform: translateX(-50%);
+  background: var(--ink); color: var(--paper);
+  padding: 10px 18px;
+  font-size: var(--t-note);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+  z-index: 100;
+}
+.toast.is-on { opacity: 1; }
+
+input[type=file] { display: none; }
+
+/* loading spinner — minimal monochrome */
+.spinner {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border: 2px solid var(--ink-3);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="paper-utility">
+  <div class="paper-utility__left">
+    <span class="dot" id="conn-dot"></span>
+    <span id="conn-label">paper-e6</span>
+  </div>
+  <div class="paper-utility__right">
+    <button id="btn-settings">⚙</button>
+  </div>
+</div>
+
+<div class="paper-wordmark">
+  <div class="paper-wordmark__title">PHOTOS</div>
+  <div class="paper-wordmark__meta" id="count">0</div>
+</div>
+<div class="paper-rule--thick"></div>
+
+<div id="grid" class="grid"></div>
+<div id="empty" class="paper-empty" hidden>No photos yet. Tap UPLOAD to add one.</div>
+
+<div class="paper-bar">
+  <button id="btn-next">Next</button>
+  <button id="btn-upload">Upload</button>
+</div>
+
+<input type="file" id="file-picker" accept="image/*">
+
+<!-- Upload / crop sheet -->
+<div id="sheet-upload" class="sheet upload-crop">
+  <div class="sheet__head">
+    <div class="sheet__title">Crop &amp; Adjust</div>
+    <button class="sheet__close" data-close="sheet-upload">Cancel</button>
+  </div>
+  <div class="sheet__body" style="display:flex; flex-direction:column; padding:0;">
+    <div id="stage" class="stage crop-step">
+      <canvas id="stage-canvas"></canvas>
+      <div id="stage-mask" class="stage__mask"></div>
+      <div class="stage__hint">drag · pinch · scroll to zoom</div>
+    </div>
+    <div class="crop-actions crop-step">
+      <button id="btn-rotate" type="button">Rotate 90°</button>
+      <button id="btn-fit" type="button">Fit</button>
+    </div>
+    <div class="stage-tools adjust-step">
+      <div class="adjust-preview-box">
+        <canvas id="preview-canvas" width="200" height="300" title="Tap to toggle source / dithered"></canvas>
+      </div>
+      <div class="stage-tools__buttons">
+        <div id="preview-status">Dithered preview</div>
+        <div class="preset-row">
+          <select id="preset-select" aria-label="Preset"></select>
+          <button id="btn-apply-preset" type="button">Apply</button>
+          <button id="btn-auto-adjust" type="button">Auto</button>
+        </div>
+        <div class="stage-tools__btnrow">
+          <button id="btn-save-preset" type="button">Save Preset</button>
+        </div>
+      </div>
+    </div>
+    <div id="adjust-splitter" class="adjust-splitter adjust-step" title="Drag to resize preview"></div>
+    <!-- per-image adjustment panel — defaults pulled from /api/calib. -->
+    <details class="adjust-panel adjust-step" id="adjust-panel">
+      <summary>Advanced</summary>
+      <div class="adjust-grid">
+        <label>Brightness <span data-val="brightness">0</span></label>
+        <div class="slider" data-key="brightness" data-min="-100" data-max="100" data-step="1" data-value="0">
+          <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
+        </div>
+        <label>Exposure <span data-val="exposure">0</span></label>
+        <div class="slider" data-key="exposure" data-min="-100" data-max="100" data-step="1" data-value="0">
+          <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
+        </div>
+        <label>Contrast <span data-val="contrast">106</span></label>
+        <div class="slider" data-key="contrast" data-min="0" data-max="200" data-step="1" data-value="106">
+          <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
+        </div>
+        <label>Saturation <span data-val="saturation">106</span></label>
+        <div class="slider" data-key="saturation" data-min="0" data-max="200" data-step="1" data-value="106">
+          <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
+        </div>
+        <label>Vibrance <span data-val="vibrance">24</span></label>
+        <div class="slider" data-key="vibrance" data-min="-100" data-max="100" data-step="1" data-value="24">
+          <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
+        </div>
+        <label>Gamma <span data-val="gamma">96</span></label>
+        <div class="slider" data-key="gamma" data-min="20" data-max="300" data-step="1" data-value="96">
+          <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
+        </div>
+        <label>Temperature <span data-val="temperature">106</span></label>
+        <div class="slider" data-key="temperature" data-min="50" data-max="150" data-step="1" data-value="106">
+          <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
+        </div>
+        <label>Tint <span data-val="tint">99</span></label>
+        <div class="slider" data-key="tint" data-min="50" data-max="150" data-step="1" data-value="99">
+          <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
+        </div>
+        <label>Smoothness <span data-val="smoothness">10</span></label>
+        <div class="slider" data-key="smoothness" data-min="0" data-max="100" data-step="1" data-value="10">
+          <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
+        </div>
+        <label>Sharpen <span data-val="sharpen">34</span></label>
+        <div class="slider" data-key="sharpen" data-min="0" data-max="100" data-step="1" data-value="34">
+          <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
+        </div>
+        <label>Vignette fix <span data-val="vignette">14</span></label>
+        <div class="slider" data-key="vignette" data-min="-100" data-max="100" data-step="1" data-value="14">
+          <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
+        </div>
+        <button id="btn-reset-adjust" type="button">Reset to calibration default</button>
+      </div>
+    </details>
+  </div>
+  <div class="sheet__foot">
+    <button id="btn-upload-back" type="button">Back</button>
+    <button id="btn-upload-next" class="is-primary" type="button">Next: Adjust</button>
+    <button id="btn-send" class="is-primary">Send</button>
+  </div>
+</div>
+
+<!-- Photo detail sheet -->
+<div id="sheet-detail" class="sheet">
+  <div class="sheet__head">
+    <div class="sheet__title" id="detail-name">photo</div>
+    <button class="sheet__close" data-close="sheet-detail">Close</button>
+  </div>
+  <div class="sheet__body detail__img">
+    <img id="detail-img" alt="">
+  </div>
+  <div class="sheet__foot">
+    <button id="btn-delete">Delete</button>
+    <button id="btn-tune">Tune</button>
+    <button id="btn-show" class="is-primary">Show Now</button>
+  </div>
+</div>
+
+<!-- Settings sheet -->
+<div id="sheet-settings" class="sheet">
+  <div class="sheet__head">
+    <div class="sheet__title">Settings</div>
+    <button class="sheet__close" data-close="sheet-settings">Done</button>
+  </div>
+  <div class="sheet__body">
+    <div class="row">
+      <div class="row__label">Loop interval</div>
+      <div class="row__value" id="loop-value">— s</div>
+    </div>
+    <div style="padding:0 var(--margin) 14px;">
+      <input id="loop-range" type="range" min="30" max="3600" step="30" value="600">
+    </div>
+    <div class="row">
+      <div class="row__label">Photos on device</div>
+      <div class="row__value" id="set-count">0</div>
+    </div>
+    <div class="row" id="row-open-calib" style="cursor:pointer;">
+      <div class="row__label">Display calibration</div>
+      <div class="row__value">edit ›</div>
+    </div>
+    <div class="row">
+      <div class="row__label">Firmware</div>
+      <div class="row__value">paper-e6</div>
+    </div>
+  </div>
+</div>
+
+<!-- Calibration wizard — walks the user through each of 6 inks, asking them
+     to match an on-screen swatch to what the physical panel is showing. -->
+<div id="sheet-calib" class="sheet">
+  <div class="sheet__head">
+    <div class="sheet__title" id="calib-step-title">Calibration</div>
+    <button class="sheet__close" data-close="sheet-calib">Cancel</button>
+  </div>
+  <div class="sheet__body" id="calib-body">
+    <div class="calib-progress" id="calib-progress"></div>
+    <p class="calib-instructions" id="calib-instructions">Tap "Show on panel" — the panel will refresh (~30 s).  Once it settles, drag the sliders below so the swatch matches what you see on the panel.</p>
+    <div class="calib-actions">
+      <button id="btn-calib-show">Show on panel</button>
+      <span class="calib-actions__hint" id="calib-actions__hint"></span>
+    </div>
+    <div class="calib-swatch-big" id="calib-swatch-big"></div>
+    <div class="calib-sliders">
+      <label>Hue       <span id="calib-h-val">0°</span></label>
+      <input id="calib-h" type="range" min="0" max="360" step="1" value="0">
+      <label>Saturation<span id="calib-s-val">0%</span></label>
+      <input id="calib-s" type="range" min="0" max="100" step="1" value="0">
+      <label>Lightness <span id="calib-l-val">50%</span></label>
+      <input id="calib-l" type="range" min="0" max="100" step="1" value="50">
+    </div>
+    <div class="calib-readout" id="calib-readout">rgb(0, 0, 0)</div>
+  </div>
+  <div class="sheet__foot">
+    <button id="btn-calib-prev">Back</button>
+    <button id="btn-calib-skip">Skip</button>
+    <button id="btn-calib-next" class="is-primary">Next →</button>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// ---------- API ----------
+// Panel native resolution (TW × TH) and 1.5× supersample resolution
+// (SW × SH) used by the dither.  bakeCanvas renders into the 600×900
+// supersample buffer; the WASM dither_15x path averages each 1.5×1.5 source
+// block in linear-light before mapping to one of the 6 inks at panel
+// resolution.  Stored JPGs are kept at supersample resolution so a future
+// "Tune" cycle doesn't lose the extra source detail.
+const TW = 400, TH = 600;
+const SW = 600, SH = 900;
+const PALETTE_ORDER = ['black','white','yellow','red','blue','green'];
+const api = {
+  async list()    { const r = await fetch('/api/list'); return r.json(); },
+  async cfg()     { const r = await fetch('/api/config'); return r.json(); },
+  async setCfg(j) { return fetch('/api/config', {method:'POST', body: JSON.stringify(j)}); },
+  async calib()   { const r = await fetch('/api/calib'); return r.json(); },
+  async setCalib(j) { return fetch('/api/calib', {method:'POST', body: JSON.stringify(j)}); },
+  async del(name) { return fetch('/api/photo/' + encodeURIComponent(name), {method:'DELETE'}); },
+  async show(name){ return fetch('/api/display/' + encodeURIComponent(name), {method:'POST'}); },
+  async next()    { return fetch('/api/next', {method:'POST'}); },
+  async upload(name, blob, mime) {
+    return fetch('/api/upload/' + encodeURIComponent(name),
+                 {method:'POST', headers:{'Content-Type': mime || 'application/octet-stream'}, body: blob});
+  },
+};
+
+async function uploadStatusMessage(resp, label) {
+  let body = '';
+  try { body = (await resp.text()).trim(); } catch {}
+  if (resp.status === 507) {
+    return (label || 'File') + ' upload failed: device storage is full';
+  }
+  return (label || 'File') + ' upload failed (' + resp.status + (body ? ': ' + body : '') + ')';
+}
+
+// ---------- WASM dither bridge ----------
+// We compile color_pipeline.c + dither.c + palette.c to dither.wasm at build
+// time. The browser fetches it once per session, then for every photo upload
+// we hand it the cropped/adjusted RGB888 buffer and read back 120 KB of
+// pre-packed 4-bit framebuffer.
+let wasm = null;
+async function loadWasm() {
+  if (wasm) return wasm;
+  // cache: 'no-store' — the previous build shipped /dither.wasm with
+  // Cache-Control: max-age=86400, so users on the old firmware have a stale
+  // copy that lacks the new exports (e.g. wasm_dither_15x).  Forcing
+  // no-store on the *request* bypasses that stale entry even when the
+  // browser hasn't yet honoured the new server-side no-store response.
+  const resp = await fetch('/dither.wasm', {cache: 'no-store'});
+  const bytes = await resp.arrayBuffer();
+  // Closure for the wasi imports — fd_write needs the heap to report the
+  // exact byte count back to the WASM side or libc spins forever waiting for
+  // a partial-write retry.
+  let exports = null;
+  const fdWrite = (fd, iov, iovcnt, nwrittenPtr) => {
+    const view = new DataView(exports.memory.buffer);
+    let total = 0;
+    for (let i = 0; i < iovcnt; i++) {
+      total += view.getUint32(iov + i*8 + 4, true);
+    }
+    view.setUint32(nwrittenPtr, total, true);
+    return 0;
+  };
+  const mod = await WebAssembly.instantiate(bytes, {
+    wasi_snapshot_preview1: {
+      proc_exit: () => { throw new Error('wasm trap'); },
+      fd_close: () => 0,
+      fd_seek:  () => 0,
+      fd_write: fdWrite,
+      fd_read:  () => 0,
+      environ_sizes_get: () => 0,
+      environ_get: () => 0,
+    },
+    env: {
+      emscripten_notify_memory_growth: () => {},
+    },
+  });
+  exports = mod.instance.exports;
+  if (exports._initialize) exports._initialize();
+  wasm = {
+    exports,
+    memory:  exports.memory,
+    malloc:  exports.malloc,
+    free:    exports.free,
+    init:    exports.wasm_init,
+    setPalette: exports.wasm_set_palette_lab,
+    dither:    exports.wasm_dither,
+    dither15x: exports.wasm_dither_15x,
+    flatFill:  exports.wasm_flat_fill,
+    flatFill15x: exports.wasm_flat_fill_15x,
+  };
+  wasm.init();
+  return wasm;
+}
+
+// Calibration cache (palette + default adjust).  Fetched on page load.
+// Only RGB is stored — LAB is derived from RGB right before dither using the
+// same C/WASM rgb_to_lab_u8 that the algorithm consumes, so there's never a
+// stale-LAB / wrong-LAB hazard.
+let calib = null;
+const CALIB_FALLBACK = {
+  palette: {
+    black:  {rgb:[ 70, 71, 80]},
+    white:  {rgb:[151,161,160]},
+    yellow: {rgb:[163,154, 69]},
+    red:    {rgb:[118, 69, 70]},
+    blue:   {rgb:[ 60, 97,134]},
+    green:  {rgb:[ 77,100, 76]},
+  },
+  adjust: {brightness:0, exposure:0, contrast:106, saturation:106, vibrance:24, gamma:96, temperature:106, tint:99, smoothness:10, sharpen:34, vignette:14},
+};
+async function loadCalib() {
+  try { calib = await api.calib(); } catch (e) { calib = null; }
+  if (!calib || !calib.palette || !calib.adjust) calib = JSON.parse(JSON.stringify(CALIB_FALLBACK));
+  // Strip any stored `lab` — derived from `rgb` exclusively from now on.
+  for (const name of PALETTE_ORDER) {
+    if (calib.palette[name] && calib.palette[name].lab) delete calib.palette[name].lab;
+  }
+  return calib;
+}
+
+// Push the calibrated palette LAB values into the WASM module so the
+// CIEDE2000 distance metric uses panel-measured colours.
+// LAB is computed from RGB by the WASM's own rgb_to_lab_u8 — the same
+// function the dither runs internally — so the targets and the source
+// pixels use a consistent colour space.
+function pushPaletteToWasm() {
+  if (!wasm || !calib) return;
+  const rgbToLab = wasm.exports.wasm_rgb_to_lab;
+  const lab18 = new Float32Array(18);
+  const tmpPtr = wasm.malloc(12);
+  const tmp = new Float32Array(wasm.memory.buffer, tmpPtr, 3);
+  PALETTE_ORDER.forEach((name, i) => {
+    const [r,g,b] = calib.palette[name].rgb;
+    rgbToLab(r|0, g|0, b|0, tmpPtr);
+    lab18[i*3 + 0] = tmp[0];
+    lab18[i*3 + 1] = tmp[1];
+    lab18[i*3 + 2] = tmp[2];
+  });
+  wasm.free(tmpPtr);
+  const ptr = wasm.malloc(lab18.byteLength);
+  new Float32Array(wasm.memory.buffer, ptr, 18).set(lab18);
+  wasm.setPalette(ptr);
+  wasm.free(ptr);
+}
+
+// ---------- toast ----------
+const toastEl = document.getElementById('toast');
+let toastTimer;
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('is-on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('is-on'), 1500);
+}
+
+// ---------- gallery refresh ----------
+const gridEl = document.getElementById('grid');
+const emptyEl = document.getElementById('empty');
+const countEl = document.getElementById('count');
+const setCountEl = document.getElementById('set-count');
+let state = { photos: [], active: null };
+
+async function refresh() {
+  try {
+    const r = await api.list();
+    state.photos = r.photos || [];
+    state.active = r.active || null;
+    countEl.textContent = state.photos.length;
+    setCountEl.textContent = state.photos.length;
+    gridEl.innerHTML = '';
+    if (state.photos.length === 0) {
+      emptyEl.hidden = false;
+    } else {
+      emptyEl.hidden = true;
+      for (const p of state.photos) {
+        const tile = document.createElement('div');
+        tile.className = 'tile' + (p.name === state.active ? ' is-active' : '');
+        tile.innerHTML = `
+          <img src="/api/photo/${encodeURIComponent(p.name)}" loading="lazy" alt="">
+          <div class="tile__caption">
+            <span>${shortName(p.name)}</span>
+            <span>${formatBytes(p.size)}</span>
+          </div>`;
+        tile.onclick = () => openDetail(p);
+        gridEl.appendChild(tile);
+      }
+    }
+  } catch (e) {
+    toast('Refresh failed');
+    console.error(e);
+  }
+}
+
+function shortName(n) {
+  return n.length > 12 ? n.slice(0,9) + '…' : n;
+}
+function formatBytes(b) {
+  if (b < 1024) return b + 'B';
+  if (b < 1024*1024) return Math.round(b/1024) + 'K';
+  return (b/1024/1024).toFixed(1) + 'M';
+}
+
+// ---------- detail sheet ----------
+const detailSheet = document.getElementById('sheet-detail');
+const detailImg = document.getElementById('detail-img');
+const detailName = document.getElementById('detail-name');
+let detailTarget = null;
+
+function openDetail(p) {
+  detailTarget = p;
+  detailName.textContent = p.name;
+  detailImg.src = '/api/photo/' + encodeURIComponent(p.name);
+  detailSheet.classList.add('is-open');
+}
+document.getElementById('btn-delete').onclick = async () => {
+  if (!detailTarget) return;
+  try {
+    const r = await api.del(detailTarget.name);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    detailSheet.classList.remove('is-open');
+    toast('Deleted');
+    refresh();
+  } catch (e) {
+    toast('Delete failed');
+    console.error(e);
+  }
+};
+document.getElementById('btn-show').onclick = async () => {
+  if (!detailTarget) return;
+  await api.show(detailTarget.name);
+  toast('Refreshing display…');
+  detailSheet.classList.remove('is-open');
+  setTimeout(refresh, 1500);
+};
+
+// Tune: load the existing JPG into the upload sheet so the user can re-crop,
+// re-adjust, and re-dither. Re-using the same base name overwrites the
+// previous .jpg + .bin pair atomically; after the new bake completes the
+// panel auto-refreshes (see Send handler).  We also try to load the
+// .json sidecar so the sliders start at the previous tune's values
+// instead of the device-wide calibration defaults.
+document.getElementById('btn-tune').onclick = async () => {
+  if (!detailTarget) return;
+  try {
+    const resp = await fetch('/api/photo/' + encodeURIComponent(detailTarget.name));
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const blob = await resp.blob();
+    const bmp  = await createImageBitmap(blob);
+    // Strip extension — bake() will reattach .jpg / .bin to the same base.
+    const base = detailTarget.name.replace(/\.(jpe?g|bmp|bin|json)$/i, '');
+    uploadBaseOverride = base;
+
+    // Try the sidecar.  404 = legacy photo without saved tune params, fall
+    // through to defaults.  Any other failure is logged but non-fatal.
+    //
+    // cache: 'no-store' — h_photo_get sends Cache-Control: max-age=86400
+    // (right for JPGs, wrong here).  Without it, the browser serves the
+    // first 404 response from cache for 24 h, so a Tune flow run right
+    // after Send sees the cached "missing" sidecar even though the device
+    // now has the file.  That presented to the user as "save doesn't work".
+    let preserveAdjust = false;
+    try {
+      const sresp = await fetch('/api/photo/' + encodeURIComponent(base + '.json'),
+                                {cache: 'no-store'});
+      if (sresp.ok) {
+        const sidecar = await sresp.json();
+        if (sidecar && sidecar.adjust) {
+          Object.assign(perImageAdjust, sidecar.adjust);
+          outputMode = sidecar.mode || 'dither';
+          preserveAdjust = true;
+          console.log('Tune: loaded sidecar adjust', sidecar.adjust);
+        }
+      } else {
+        console.log('Tune: no sidecar (', sresp.status, ')');
+      }
+    } catch (e) { console.warn('Tune: sidecar fetch failed', e); }
+
+    detailSheet.classList.remove('is-open');
+    openUpload(bmp, {preserveAdjust});
+  } catch (e) {
+    toast('Cannot load photo');
+    console.error(e);
+  }
+};
+
+// ---------- close handlers ----------
+document.querySelectorAll('[data-close]').forEach(b => {
+  b.onclick = () => {
+    const id = b.dataset.close;
+    document.getElementById(id).classList.remove('is-open');
+    // Cancelling a "Tune" mid-flow must NOT leave the overwrite name latched
+    // for the next fresh upload — that would clobber the tuned photo with
+    // an unrelated image.
+    if (id === 'sheet-upload') uploadBaseOverride = null;
+  };
+});
+
+// ---------- Next ----------
+document.getElementById('btn-next').onclick = async () => {
+  await api.next();
+  toast('Next photo');
+  setTimeout(refresh, 1500);
+};
+
+// ---------- Settings ----------
+const settingsSheet = document.getElementById('sheet-settings');
+const loopRange = document.getElementById('loop-range');
+const loopValue = document.getElementById('loop-value');
+
+function fmtInterval(s) {
+  if (s < 60) return s + ' s';
+  if (s < 3600) return (s/60).toFixed(s%60===0?0:1) + ' min';
+  return (s/3600).toFixed(s%3600===0?0:1) + ' h';
+}
+loopRange.oninput = () => loopValue.textContent = fmtInterval(+loopRange.value);
+loopRange.onchange = () => api.setCfg({loop_interval_s: +loopRange.value});
+
+document.getElementById('btn-settings').onclick = async () => {
+  try {
+    const cfg = await api.cfg();
+    loopRange.value = cfg.loop_interval_s || 600;
+    loopValue.textContent = fmtInterval(+loopRange.value);
+  } catch (e) { /* offline OK */ }
+  settingsSheet.classList.add('is-open');
+};
+
+// ---------- Upload / crop ----------
+const filePicker = document.getElementById('file-picker');
+const uploadSheet = document.getElementById('sheet-upload');
+const stageEl = document.getElementById('stage');
+const stageCanvas = document.getElementById('stage-canvas');
+const stageMask = document.getElementById('stage-mask');
+
+
+// ---------- adjustment presets ----------
+const BUILTIN_PRESETS = {
+  balanced: {label:'Balanced', values:{brightness:0, exposure:0, contrast:106, saturation:106, vibrance:24, gamma:96, temperature:106, tint:99, smoothness:10, sharpen:34, vignette:14}},
+  landscape:{label:'Landscape', values:{brightness:0, exposure:4, contrast:112, saturation:112, vibrance:34, gamma:94, temperature:104, tint:100, smoothness:8, sharpen:42, vignette:18}},
+  portrait: {label:'Portrait', values:{brightness:2, exposure:3, contrast:102, saturation:101, vibrance:18, gamma:98, temperature:110, tint:100, smoothness:14, sharpen:24, vignette:10}},
+  anime:    {label:'Anime', values:{brightness:0, exposure:2, contrast:116, saturation:118, vibrance:12, gamma:92, temperature:104, tint:100, smoothness:4, sharpen:50, vignette:0}},
+  document: {label:'Document', values:{brightness:4, exposure:6, contrast:126, saturation:80, vibrance:-20, gamma:90, temperature:100, tint:100, smoothness:2, sharpen:62, vignette:22}},
+  russian:  {label:'Russian', mode:'flat-russian', values:{brightness:1, exposure:3, contrast:123, saturation:88, vibrance:-6, gamma:91, temperature:104, tint:98, smoothness:100, sharpen:58, vignette:10}},
+};
+let customPresets = {};
+let outputMode = 'dither';
+function loadCustomPresets() {
+  try { customPresets = JSON.parse(localStorage.getItem('paperE6CustomPresets') || '{}') || {}; }
+  catch { customPresets = {}; }
+}
+function saveCustomPresets() {
+  localStorage.setItem('paperE6CustomPresets', JSON.stringify(customPresets));
+}
+function allPresets() { return {...BUILTIN_PRESETS, ...customPresets}; }
+function renderPresetSelect() {
+  const sel = document.getElementById('preset-select');
+  if (!sel) return;
+  loadCustomPresets();
+  sel.innerHTML = '';
+  for (const [key, p] of Object.entries(BUILTIN_PRESETS)) {
+    const o = document.createElement('option'); o.value = key; o.textContent = p.label; sel.appendChild(o);
+  }
+  const customKeys = Object.keys(customPresets);
+  if (customKeys.length) {
+    const sep = document.createElement('option'); sep.disabled = true; sep.textContent = '— Custom —'; sel.appendChild(sep);
+    for (const key of customKeys) {
+      const o = document.createElement('option'); o.value = key; o.textContent = customPresets[key].label || key; sel.appendChild(o);
+    }
+  }
+}
+function applyAdjustValues(values) {
+  for (const [k, v] of Object.entries(values)) {
+    if (perImageAdjust[k] != null) perImageAdjust[k] = v;
+  }
+  syncAdjustControls();
+  schedulePreviewUpdate();
+}
+function applySelectedPreset() {
+  const sel = document.getElementById('preset-select');
+  const p = sel && allPresets()[sel.value];
+  if (!p) return;
+  outputMode = p.mode || 'dither';
+  applyAdjustValues(p.values);
+}
+
+function analyzeCanvasForAuto(canvas) {
+  const w = 96, h = 144;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(canvas, 0, 0, w, h);
+  const data = ctx.getImageData(0, 0, w, h).data;
+
+  let sumY=0, sumY2=0, edge=0, chroma=0, warm=0, cool=0, blue=0, green=0, bright=0, dark=0;
+  let centerY=0, cornerY=0, centerN=0, cornerN=0;
+  const ys = new Float32Array(w*h);
+  for (let y = 0, i = 0; y < h; y++) {
+    for (let x = 0; x < w; x++, i++) {
+      const j = i*4, r=data[j], g=data[j+1], b=data[j+2];
+      const yy = 0.299*r + 0.587*g + 0.114*b;
+      ys[i] = yy;
+      sumY += yy; sumY2 += yy*yy;
+      const maxc = Math.max(r,g,b), minc = Math.min(r,g,b);
+      const ch = maxc - minc; chroma += ch;
+      if (yy > 190) bright++;
+      if (yy < 55) dark++;
+      if (r > 78 && g > 44 && r >= g && g >= b - 8 && r - b > 18 && ch > 20) warm++;
+      if (b > 72 && b >= r + 10 && b >= g - 4 && yy > 72 && ch > 16) cool++;
+      if (b > r + 18 && b > g + 8) blue++;
+      if (g > r + 10 && g >= b - 4) green++;
+      const nx = (x + 0.5) / w * 2 - 1, ny = (y + 0.5) / h * 2 - 1;
+      const rr = nx*nx + ny*ny;
+      if (rr < 0.35) { centerY += yy; centerN++; }
+      if (rr > 1.05) { cornerY += yy; cornerN++; }
+    }
+  }
+  for (let y = 1; y < h-1; y++) {
+    for (let x = 1; x < w-1; x++) {
+      const i = y*w+x;
+      edge += Math.abs(ys[i+1]-ys[i-1]) + Math.abs(ys[i+w]-ys[i-w]);
+    }
+  }
+  const n = w*h;
+  const mean = sumY/n;
+  const std = Math.sqrt(Math.max(0, sumY2/n - mean*mean));
+  return {
+    mean, std, edge: edge / ((w-2)*(h-2)), chroma: chroma/n,
+    warm: warm/n, cool: cool/n, blue: blue/n, green: green/n, bright: bright/n, dark: dark/n,
+    vignetteDelta: (centerY/Math.max(1,centerN)) - (cornerY/Math.max(1,cornerN))
+  };
+}
+
+function chooseAutoPreset(stats) {
+  if (stats.edge > 46 && stats.chroma < 34 && stats.std > 42) return 'document';
+  if (stats.edge > 36 && stats.chroma > 42 && stats.bright > 0.18) return 'anime';
+  if (stats.warm > 0.16 && stats.mean > 72 && stats.mean < 185) return 'portrait';
+  if ((stats.blue + stats.green + stats.cool) > 0.32 || stats.chroma > 48) return 'landscape';
+  return 'balanced';
+}
+
+function buildAutoAdjust(stats) {
+  const key = chooseAutoPreset(stats);
+  const base = {...BUILTIN_PRESETS[key].values};
+
+  // Exposure: put mean luma near EINK-friendly mid-high target (~142), but
+  // avoid large jumps that would crush shadows/highlights before dithering.
+  const target = key === 'document' ? 166 : (key === 'portrait' ? 148 : 142);
+  base.exposure = Math.max(-28, Math.min(28, Math.round(Math.log2(target / Math.max(32, stats.mean)) * 100)));
+
+  // Contrast and gamma respond to measured image contrast.
+  if (stats.std < 34) { base.contrast += 5; base.gamma -= 2; }
+  if (stats.std > 62) { base.contrast -= 4; base.gamma += 2; }
+
+  // Vignette fix compensates darker corners; clamp so it does not flatten the
+  // intentional composition of already-good images.
+  base.vignette = Math.max(0, Math.min(34, Math.round(stats.vignetteDelta * 0.55)));
+
+  // Sharpen more for low edge density, less for portraits to avoid harsh skin.
+  if (stats.edge < 22) base.sharpen += 8;
+  if (key === 'portrait') base.sharpen -= 4;
+
+  // Natural colour boost: low chroma gets vibrance, high chroma backs off.
+  if (stats.chroma < 28) base.vibrance += 10;
+  if (stats.chroma > 60) base.vibrance -= 8;
+
+  for (const k of Object.keys(base)) base[k] = Math.round(base[k]);
+  return {key, values: base, stats};
+}
+
+function applyAutoAdjust() {
+  if (!xform.src) return;
+  const canvas = bakePreviewCanvas();
+  const result = buildAutoAdjust(analyzeCanvasForAuto(canvas));
+  outputMode = 'dither';
+  applyAdjustValues(result.values);
+  const sel = document.getElementById('preset-select');
+  if (sel) sel.value = result.key;
+  toast('Auto: ' + BUILTIN_PRESETS[result.key].label);
+}
+
+// Transform state for the source canvas inside the stage.
+const xform = {
+  src: null,  // source ImageBitmap or HTMLImageElement
+  // Translate (px), scale, rotation (deg, 0/90/180/270 + free? — keep 0/90 for simplicity)
+  tx: 0, ty: 0, s: 1, rot: 0,
+};
+let cropGeom = null; // frozen crop geometry used by Adjust preview and Send
+
+// When the user opens the upload flow via "Tune" we reuse the existing
+// filename so the new bake atomically overwrites the previous .jpg + .bin.
+// null = generate a fresh p_<timestamp> name on Send (the default).
+let uploadBaseOverride = null;
+let uploadAutoApplied = false;
+
+// Per-image adjustment state — defaults pulled from calib.adjust after the
+// upload sheet opens. Values match the C adjust_cfg_t units exactly.
+const perImageAdjust = {brightness:0, exposure:0, contrast:106, saturation:106, vibrance:24, gamma:96, temperature:106, tint:99, smoothness:10, sharpen:34, vignette:14};
+
+function setPerImageAdjustFromCalib() {
+  outputMode = 'dither';
+  const a = (calib && calib.adjust) || CALIB_FALLBACK.adjust;
+  perImageAdjust.brightness  = a.brightness;
+  perImageAdjust.exposure    = (a.exposure != null) ? a.exposure : CALIB_FALLBACK.adjust.exposure;
+  perImageAdjust.contrast    = a.contrast;
+  perImageAdjust.saturation  = a.saturation;
+  perImageAdjust.vibrance    = (a.vibrance != null) ? a.vibrance : CALIB_FALLBACK.adjust.vibrance;
+  perImageAdjust.gamma       = a.gamma;
+  perImageAdjust.temperature = a.temperature;
+  // Older calibration JSONs lack newer keys — fall back to firmware defaults
+  // so the slider doesn't read NaN when the device has an old config blob.
+  perImageAdjust.tint        = (a.tint != null)
+                                 ? a.tint
+                                 : CALIB_FALLBACK.adjust.tint;
+  perImageAdjust.smoothness  = (a.smoothness != null)
+                                 ? a.smoothness
+                                 : CALIB_FALLBACK.adjust.smoothness;
+  perImageAdjust.sharpen     = (a.sharpen != null)
+                                 ? a.sharpen
+                                 : CALIB_FALLBACK.adjust.sharpen;
+  perImageAdjust.vignette    = (a.vignette != null)
+                                 ? a.vignette
+                                 : CALIB_FALLBACK.adjust.vignette;
+  syncAdjustControls();
+}
+
+// ---------- Custom thumb-drag sliders ----------
+//
+// Value changes only after pressing the enlarged thumb hit area; tapping the
+// track does not jump. The visible dot stays 22px, but the touch target is 40px.
+
+const sliderInstances = {};
+
+function initSlider(el) {
+  const key  = el.dataset.key;
+  const min  = +el.dataset.min;
+  const max  = +el.dataset.max;
+  const step = +(el.dataset.step || 1);
+  const thumb = el.querySelector('.slider__thumb');
+  const fill  = el.querySelector('.slider__fill');
+  const inner = el.querySelector('.slider__inner');
+  const out   = document.querySelector(`#adjust-panel [data-val="${key}"]`);
+  let value = +(el.dataset.value || min);
+
+  function paint() {
+    const r = (value - min) / (max - min);
+    thumb.style.left = `${r * 100}%`;
+    fill.style.width = `${r * 100}%`;
+    if (out) out.textContent = value;
+    el.dataset.value = value;
+  }
+
+  function setValue(v) {
+    value = Math.max(min, Math.min(max, Math.round(v / step) * step));
+    perImageAdjust[key] = value;
+    paint();
+  }
+
+  // Convert a clientX into a value, clamped to [min, max].  Anchored on
+  // the inner track box so it tracks the visible track exactly.
+  function xToValue(clientX) {
+    const rect = inner.getBoundingClientRect();
+    if (rect.width <= 0) return value;
+    const r = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return min + r * (max - min);
+  }
+
+  let dragging = false;
+  thumb.addEventListener('pointerdown', e => {
+    dragging = true;
+    thumb.setPointerCapture(e.pointerId);
+    thumb.classList.add('is-dragging');
+    e.preventDefault();
+  });
+  thumb.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    setValue(xToValue(e.clientX));
+    schedulePreviewUpdate();
+    e.preventDefault();
+  });
+  const endDrag = e => {
+    if (!dragging) return;
+    dragging = false;
+    thumb.classList.remove('is-dragging');
+    try { thumb.releasePointerCapture(e.pointerId); } catch {}
+  };
+  thumb.addEventListener('pointerup',     endDrag);
+  thumb.addEventListener('pointercancel', endDrag);
+
+  // Initial paint.
+  setValue(value);
+
+  return { setValue, getValue: () => value, paint };
+}
+
+// Build instances for every slider in the adjust panel.  Done once at
+// load; the same instances are reused across upload sheet sessions.
+document.querySelectorAll('#adjust-panel .slider').forEach(el => {
+  sliderInstances[el.dataset.key] = initSlider(el);
+});
+
+function syncAdjustControls() {
+  for (const key in sliderInstances) {
+    const inst = sliderInstances[key];
+    if (perImageAdjust[key] != null) inst.setValue(perImageAdjust[key]);
+  }
+}
+
+document.getElementById('btn-reset-adjust').onclick = () => {
+  outputMode = 'dither';
+  setPerImageAdjustFromCalib();
+  schedulePreviewUpdate();
+};
+document.getElementById('btn-apply-preset').onclick = applySelectedPreset;
+document.getElementById('preset-select').onchange = applySelectedPreset;
+document.getElementById('btn-auto-adjust').onclick = applyAutoAdjust;
+document.getElementById('btn-save-preset').onclick = () => {
+  const name = prompt('Preset name?');
+  if (!name) return;
+  const key = 'custom_' + Date.now();
+  customPresets[key] = {label:name.trim(), mode:outputMode, values:{...perImageAdjust}};
+  saveCustomPresets();
+  renderPresetSelect();
+  document.getElementById('preset-select').value = key;
+  toast('Preset saved');
+};
+renderPresetSelect();
+
+// ---------- Live preview ----------
+
+// Extra browser-side controls that are intentionally not part of the C
+// adjust_cfg_t ABI. They run before WASM enhancement/dither for both preview
+// and final upload: exposure is multiplicative, vignette can compensate
+// dark corners, and sharpen adds user-controlled high-frequency detail.
+function applyExtraAdjustRgb888(buf, w, h) {
+  const exposure = perImageAdjust.exposure || 0;
+  const vibrance = perImageAdjust.vibrance || 0;
+  const vignette = perImageAdjust.vignette || 0;
+  const sharpen  = perImageAdjust.sharpen || 0;
+
+  if (exposure) {
+    const gain = Math.pow(2, exposure / 100);
+    for (let i = 0; i < buf.length; i++) {
+      buf[i] = Math.max(0, Math.min(255, Math.round(buf[i] * gain)));
+    }
+  }
+
+
+  if (vibrance) {
+    const vamt = vibrance / 100;
+    for (let i = 0; i < buf.length; i += 3) {
+      const r = buf[i+0], g = buf[i+1], b = buf[i+2];
+      const maxc = Math.max(r, g, b);
+      const minc = Math.min(r, g, b);
+      const y = 0.299*r + 0.587*g + 0.114*b;
+      const sat = maxc > 0 ? (maxc - minc) / maxc : 0;
+      // Vibrance mainly lifts muted colours and backs off as saturation rises.
+      const gain = 1 + vamt * (1 - sat) * 0.75;
+      buf[i+0] = Math.max(0, Math.min(255, Math.round(y + (r - y) * gain)));
+      buf[i+1] = Math.max(0, Math.min(255, Math.round(y + (g - y) * gain)));
+      buf[i+2] = Math.max(0, Math.min(255, Math.round(y + (b - y) * gain)));
+    }
+  }
+
+  if (vignette) {
+    const cx = (w - 1) * 0.5, cy = (h - 1) * 0.5;
+    const invR2 = 1 / (cx*cx + cy*cy || 1);
+    const amount = vignette / 100;
+    for (let y = 0; y < h; y++) {
+      const dy = y - cy;
+      for (let x = 0; x < w; x++) {
+        const dx = x - cx;
+        const r2 = (dx*dx + dy*dy) * invR2;
+        // Positive values brighten corners, negative values add a vignette.
+        const gain = 1 + amount * 0.42 * r2;
+        let j = (y*w + x) * 3;
+        buf[j+0] = Math.max(0, Math.min(255, Math.round(buf[j+0] * gain)));
+        buf[j+1] = Math.max(0, Math.min(255, Math.round(buf[j+1] * gain)));
+        buf[j+2] = Math.max(0, Math.min(255, Math.round(buf[j+2] * gain)));
+      }
+    }
+  }
+
+  if (sharpen > 0) {
+    const amount = sharpen / 100 * 0.85;
+    const src = new Uint8Array(buf);
+    for (let y = 0; y < h; y++) {
+      const y0 = y > 0 ? y - 1 : 0;
+      const y2 = y < h - 1 ? y + 1 : h - 1;
+      for (let x = 0; x < w; x++) {
+        const x0 = x > 0 ? x - 1 : 0;
+        const x2 = x < w - 1 ? x + 1 : w - 1;
+        const c = (y*w + x) * 3;
+        for (let ch = 0; ch < 3; ch++) {
+          const blur = (src[(y0*w + x)*3 + ch] + src[(y2*w + x)*3 + ch] +
+                        src[(y*w + x0)*3 + ch] + src[(y*w + x2)*3 + ch] +
+                        src[c + ch] * 4) / 8;
+          const v = src[c + ch] + (src[c + ch] - blur) * amount;
+          buf[c + ch] = Math.max(0, Math.min(255, Math.round(v)));
+        }
+      }
+    }
+  }
+}
+
+function applyPanelPreviewOptics(img) {
+  // EINK pigments and phone viewing distance optically integrate neighbouring
+  // dots. A very small local blend makes the browser preview less LCD-harsh
+  // and closer to the perceived panel output.
+  const w = img.width, h = img.height;
+  const src = new Uint8ClampedArray(img.data);
+  const a = 0.18;
+  for (let y = 0; y < h; y++) {
+    const y0 = y > 0 ? y - 1 : y;
+    const y2 = y < h - 1 ? y + 1 : y;
+    for (let x = 0; x < w; x++) {
+      const x0 = x > 0 ? x - 1 : x;
+      const x2 = x < w - 1 ? x + 1 : x;
+      const i = (y*w + x) * 4;
+      for (let ch = 0; ch < 3; ch++) {
+        const avg = (src[(y*w+x0)*4+ch] + src[(y*w+x2)*4+ch] +
+                     src[(y0*w+x)*4+ch] + src[(y2*w+x)*4+ch]) * 0.25;
+        img.data[i+ch] = Math.round(src[i+ch] * (1 - a) + avg * a);
+      }
+    }
+  }
+}
+
+//
+// Small in-panel canvas that shows the current crop+adjust+dither result
+// while the user is still in the upload sheet.  Two modes, toggled by
+// btn-preview-toggle:
+//
+//   "source"  — the adjusted/enhanced RGB (post controls, pre-dither), so the
+//               user can see the colour-correction effect cleanly.
+//   "dithered" — the wasm_dither output, rendered through the calibrated
+//               panel-ink RGB values, so the user gets a faithful preview
+//               of what the panel will actually display.
+//
+// To minimise WASM/JS thrash we share a single dither call: wasm_dither
+// applies the adjust IN PLACE on its input buffer and writes the palette
+// indices to indices_opt — so one round-trip yields *both* preview images.
+//
+// Resolution is 200×300 (half panel) using the 1×1 dither path; it's not
+// quite the 1.5×-supersample algorithm the final Send runs, but it lands
+// at ~30 ms on a phone vs ~500 ms for the supersample, and the visual
+// match is close enough for interactive feedback.
+
+const PREVIEW_W = 200, PREVIEW_H = 300;
+let previewMode = 'dithered'; // 'source' | 'dithered'
+let previewSourceImg = null;
+let previewDitherImg = null;
+let previewDebounceTimer = null;
+let previewInFlight = false;
+let previewPending = false;
+
+function schedulePreviewUpdate() {
+  if (!uploadSheet.classList.contains('is-open') || !uploadSheet.classList.contains('upload-adjust') || !xform.src) return;
+  if (previewDebounceTimer) clearTimeout(previewDebounceTimer);
+  previewDebounceTimer = setTimeout(runPreviewUpdate, 200);
+}
+
+async function runPreviewUpdate() {
+  previewDebounceTimer = null;
+  // Single-flight: if a previous call is still running, mark pending and
+  // re-enter when it returns.  Slider drags can fire faster than the
+  // preview can compute, so we collapse bursts to "compute, then compute
+  // one more with the freshest state".
+  if (previewInFlight) { previewPending = true; return; }
+  if (!xform.src || !uploadSheet.classList.contains('is-open') || !uploadSheet.classList.contains('upload-adjust')) return;
+  previewInFlight = true;
+  try {
+    await loadWasm();
+    if (calib) pushPaletteToWasm();
+
+    const canvas = bakePreviewCanvas();
+    const ctx = canvas.getContext('2d');
+    const imageData = ctx.getImageData(0, 0, PREVIEW_W, PREVIEW_H);
+
+    const rgbLen = PREVIEW_W * PREVIEW_H * 3;
+    const rgbPtr = wasm.malloc(rgbLen);
+    const heap   = new Uint8Array(wasm.memory.buffer, rgbPtr, rgbLen);
+    const src    = imageData.data;
+    for (let i = 0, j = 0; i < src.length; i += 4, j += 3) {
+      heap[j+0] = src[i+0];
+      heap[j+1] = src[i+1];
+      heap[j+2] = src[i+2];
+    }
+    applyExtraAdjustRgb888(heap, PREVIEW_W, PREVIEW_H);
+
+    const cfgPtr = wasm.malloc(28);
+    const cfgView = new Int32Array(wasm.memory.buffer, cfgPtr, 7);
+    cfgView[0] = perImageAdjust.brightness;
+    cfgView[1] = perImageAdjust.contrast;
+    cfgView[2] = perImageAdjust.saturation;
+    cfgView[3] = perImageAdjust.gamma;
+    cfgView[4] = perImageAdjust.temperature;
+    cfgView[5] = perImageAdjust.tint;
+    cfgView[6] = perImageAdjust.smoothness;
+
+    const packedLen  = PREVIEW_W * PREVIEW_H / 2;
+    const packedPtr  = wasm.malloc(packedLen);
+    const indicesLen = PREVIEW_W * PREVIEW_H;
+    const indicesPtr = wasm.malloc(indicesLen);
+
+    const quantize = outputMode === 'flat-russian' ? wasm.flatFill : wasm.dither;
+    const rc = quantize(rgbPtr, PREVIEW_W, PREVIEW_H, cfgPtr,
+                        packedPtr, indicesPtr);
+    if (rc !== 0) {
+      wasm.free(rgbPtr); wasm.free(cfgPtr);
+      wasm.free(packedPtr); wasm.free(indicesPtr);
+      throw new Error('preview quantize rc=' + rc);
+    }
+
+    // wasm_dither applied the adjust in-place on rgbPtr — the buffer now
+    // holds adjusted RGB.  Copy out before freeing (WASM heap may move on
+    // growth; .slice() snapshots).
+    const adjusted = new Uint8Array(wasm.memory.buffer, rgbPtr, rgbLen).slice();
+    const indices  = new Uint8Array(wasm.memory.buffer, indicesPtr, indicesLen).slice();
+
+    wasm.free(rgbPtr); wasm.free(cfgPtr);
+    wasm.free(packedPtr); wasm.free(indicesPtr);
+
+    // Source preview = adjusted RGB straight to RGBA.
+    const srcImg = new ImageData(PREVIEW_W, PREVIEW_H);
+    for (let i = 0, j = 0; i < indicesLen; i++, j += 3) {
+      srcImg.data[i*4+0] = adjusted[j+0];
+      srcImg.data[i*4+1] = adjusted[j+1];
+      srcImg.data[i*4+2] = adjusted[j+2];
+      srcImg.data[i*4+3] = 255;
+    }
+    previewSourceImg = srcImg;
+
+    // Dithered preview = indices → calibrated panel RGB.
+    const palRGB = PALETTE_ORDER.map(name => {
+      const c = (calib && calib.palette && calib.palette[name])
+                || CALIB_FALLBACK.palette[name];
+      return (c && c.rgb) || [128, 128, 128];
+    });
+    const ditImg = new ImageData(PREVIEW_W, PREVIEW_H);
+    for (let i = 0; i < indicesLen; i++) {
+      const rgb = palRGB[indices[i]] || [128, 128, 128];
+      ditImg.data[i*4+0] = rgb[0];
+      ditImg.data[i*4+1] = rgb[1];
+      ditImg.data[i*4+2] = rgb[2];
+      ditImg.data[i*4+3] = 255;
+    }
+    applyPanelPreviewOptics(ditImg);
+    previewDitherImg = ditImg;
+
+    drawPreview();
+  } catch (e) {
+    console.warn('preview update failed', e);
+  } finally {
+    previewInFlight = false;
+    if (previewPending) {
+      previewPending = false;
+      schedulePreviewUpdate();
+    }
+  }
+}
+
+function drawPreview() {
+  const cv = document.getElementById('preview-canvas');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const img = (previewMode === 'source') ? previewSourceImg : previewDitherImg;
+  if (!img) {
+    ctx.fillStyle = '#eee';
+    ctx.fillRect(0, 0, PREVIEW_W, PREVIEW_H);
+    return;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+function drawPreviewPlaceholder() {
+  if (!xform.src) return;
+  try {
+    const canvas = bakePreviewCanvas();
+    const ctx = canvas.getContext('2d');
+    const data = ctx.getImageData(0, 0, PREVIEW_W, PREVIEW_H);
+    previewSourceImg = data;
+    if (!previewDitherImg) {
+      const cv = document.getElementById('preview-canvas');
+      const c = cv.getContext('2d');
+      c.putImageData(data, 0, 0);
+      c.fillStyle = 'rgba(250,250,247,0.78)';
+      c.fillRect(0, PREVIEW_H - 28, PREVIEW_W, 28);
+      c.fillStyle = '#333';
+      c.font = '12px sans-serif';
+      c.fillText('Rendering dither...', 10, PREVIEW_H - 10);
+    }
+  } catch (e) { console.warn('preview placeholder failed', e); }
+}
+
+// Bake at PREVIEW_W × PREVIEW_H using the same transform + mask crop that
+// bakeCanvas() uses for the final 1.5× supersample.  Different output
+// resolution, identical geometry.
+function bakePreviewCanvas() {
+  // Same direct source→output CTM trick as bakeCanvas — see that function
+  // for the matrix derivation.  No stage-pixel intermediate.
+  const g = normalizedCropGeom(cropGeom || currentCropGeom());
+  const mw = g.mw;
+  const mh = g.mh;
+  const out = document.createElement('canvas');
+  out.width  = PREVIEW_W;
+  out.height = PREVIEW_H;
+  const oc = out.getContext('2d');
+  oc.imageSmoothingEnabled = true;
+  oc.imageSmoothingQuality = 'high';
+  oc.fillStyle = '#fff';
+  oc.fillRect(0, 0, PREVIEW_W, PREVIEW_H);
+
+  oc.save();
+  oc.scale(PREVIEW_W / mw, PREVIEW_H / mh);
+  oc.translate(mw / 2 + g.tx, mh / 2 + g.ty);
+  oc.rotate(g.rot * Math.PI / 180);
+  oc.scale(g.s, g.s);
+  oc.translate(-xform.src.width / 2, -xform.src.height / 2);
+  oc.drawImage(xform.src, 0, 0);
+  oc.restore();
+  return out;
+}
+
+// Toggle source ↔ dithered by tapping the preview canvas itself.  The
+// status line below the preview shows which mode is currently displayed
+// so users get explicit feedback (the canvas tap target is large enough
+// that we don't need a separate button).
+function setPreviewMode(mode) {
+  previewMode = mode;
+  const st = document.getElementById('preview-status');
+  if (st) {
+    st.textContent = (mode === 'source')
+      ? 'Source (tap to see dithered)'
+      : 'Dithered (tap to see source)';
+  }
+  drawPreview();
+}
+document.getElementById('preview-canvas').addEventListener('click', () => {
+  setPreviewMode(previewMode === 'source' ? 'dithered' : 'source');
+});
+// Initialise status line so the user sees the active mode before the
+// first slider interaction.
+setPreviewMode(previewMode);
+
+
+
+function currentCropGeom() {
+  return {
+    mw: stageMask._w || 1,
+    mh: stageMask._h || 1,
+    tx: xform.tx,
+    ty: xform.ty,
+    s: xform.s,
+    rot: xform.rot,
+  };
+}
+
+function normalizedCropGeom(g) {
+  // Step2 renders directly from the frozen crop transform, not from the
+  // visible Stage1 DOM.  Re-apply the cover constraint against the frozen mask
+  // here so hidden-layout timing or sub-pixel rounding cannot introduce white
+  // side/top bars in preview or final dither input.
+  if (!xform.src) return g;
+  const rotSwap = (g.rot === 90 || g.rot === 270);
+  const sw = rotSwap ? xform.src.height : xform.src.width;
+  const sh = rotSwap ? xform.src.width  : xform.src.height;
+  const out = {...g};
+  const minS = Math.max(out.mw / sw, out.mh / sh) * 1.001;
+  if (out.s < minS) out.s = minS;
+  const hw = sw * out.s * 0.5;
+  const hh = sh * out.s * 0.5;
+  const maxTx = Math.max(0, hw - out.mw * 0.5);
+  const maxTy = Math.max(0, hh - out.mh * 0.5);
+  out.tx = Math.max(-maxTx, Math.min(maxTx, out.tx));
+  out.ty = Math.max(-maxTy, Math.min(maxTy, out.ty));
+  return out;
+}
+
+function freezeCropGeom() {
+  // Must be called while Crop stage is visible; Adjust hides the stage, whose
+  // DOM size can become zero.  Freezing prevents Step2 preview/Send from using
+  // polluted hidden-stage dimensions.
+  if (!stageMask._w || !stageMask._h) layoutMask();
+  clampXformToMask();
+  cropGeom = normalizedCropGeom(currentCropGeom());
+}
+
+function setUploadStep(step) {
+  const sheet = document.getElementById('sheet-upload');
+  if (step === 'adjust') freezeCropGeom();
+  sheet.classList.toggle('upload-crop', step === 'crop');
+  sheet.classList.toggle('upload-adjust', step === 'adjust');
+  const title = sheet.querySelector('.sheet__title');
+  if (title) title.textContent = step === 'crop' ? 'Crop' : 'Adjust';
+  if (step === 'crop') {
+    cropGeom = null;
+    requestAnimationFrame(() => { layoutMask(); applyXform(); });
+  }
+  if (step === 'adjust') {
+    requestAnimationFrame(clampAdjustPreviewHeight);
+    previewDitherImg = null;
+    drawPreviewPlaceholder();
+    if (!uploadAutoApplied && !uploadBaseOverride) {
+      uploadAutoApplied = true;
+      applyAutoAdjust();
+    }
+    schedulePreviewUpdate();
+  }
+}
+document.getElementById('btn-upload-next').onclick = () => setUploadStep('adjust');
+document.getElementById('btn-upload-back').onclick = () => setUploadStep('crop');
+
+function openUpload(srcBitmap, opts) {
+  xform.src = srcBitmap;
+  uploadAutoApplied = false;
+  xform.rot = 0;
+  // Set the canvas internal pixel size to its natural source size so we draw 1:1.
+  stageCanvas.width = srcBitmap.width;
+  stageCanvas.height = srcBitmap.height;
+  const ctx = stageCanvas.getContext('2d');
+  ctx.drawImage(srcBitmap, 0, 0);
+  // When opening via Tune with a saved sidecar, perImageAdjust is already
+  // populated — just sync the sliders to that state.  Otherwise reset to
+  // the device-wide calibration defaults so a fresh upload starts neutral.
+  if (opts && opts.preserveAdjust) {
+    syncAdjustControls();
+  } else {
+    setPerImageAdjustFromCalib();
+  }
+  uploadSheet.classList.add('is-open');
+  setUploadStep('crop');
+  // Force synchronous layout so the stage's real dimensions are known
+  // *before* the first fit — a deferred rAF can see stale values on slow
+  // devices, leaving the canvas under-scaled (= mask not fully filled).
+  // Followup rAF re-fits in case the layout settles further (CSS env(...),
+  // dynamic UI bars on mobile, etc.).
+  void stageEl.offsetHeight;
+  layoutMask();
+  fitToMask();
+  requestAnimationFrame(() => {
+    layoutMask();
+    fitToMask();
+    if (opts && opts.preserveAdjust) setUploadStep('adjust');
+  });
+  // Crop step skips expensive preview; adjust step schedules it above.
+}
+
+// Observe the stage for size changes (orientation, viewport bars showing or
+// hiding) and re-fit ONLY if the user hasn't started panning/zooming yet
+// (xform untouched since the last fit).  Saves work for active edits but
+// guarantees a clean initial cover when the layout finally settles.
+let fittedTx = 0, fittedTy = 0, fittedS = 1;
+new ResizeObserver(() => {
+  if (!xform.src || !uploadSheet.classList.contains('is-open') || !uploadSheet.classList.contains('upload-crop')) return;
+  if (xform.tx === fittedTx && xform.ty === fittedTy && xform.s === fittedS) {
+    layoutMask();
+    fitToMask();
+  }
+}).observe(stageEl);
+
+function layoutMask() {
+  // Mask is 2:3 portrait, fits inside the stage with 8% padding.
+  if (!uploadSheet.classList.contains('upload-crop')) return;
+  const stageRect = stageEl.getBoundingClientRect();
+  if (stageRect.width <= 0 || stageRect.height <= 0) return;
+  const padding = 24;
+  const availW = stageRect.width - padding*2;
+  const availH = stageRect.height - padding*2;
+  let mw, mh;
+  if (availW / availH < TW / TH) {
+    mw = availW; mh = mw * TH / TW;
+  } else {
+    mh = availH; mw = mh * TW / TH;
+  }
+  stageMask.style.width = mw + 'px';
+  stageMask.style.height = mh + 'px';
+  stageMask._w = mw; stageMask._h = mh;
+}
+
+window.addEventListener('resize', layoutMask);
+
+
+function transformedHalfExtents() {
+  if (!xform.src) return {hw:0, hh:0};
+  const rotSwap = (xform.rot === 90 || xform.rot === 270);
+  const sw = rotSwap ? xform.src.height : xform.src.width;
+  const sh = rotSwap ? xform.src.width  : xform.src.height;
+  return { hw: sw * xform.s * 0.5, hh: sh * xform.s * 0.5 };
+}
+
+function minCoverScale() {
+  if (!xform.src) return 1;
+  if (uploadSheet.classList.contains('upload-crop')) layoutMask();
+  const rotSwap = (xform.rot === 90 || xform.rot === 270);
+  const sw = rotSwap ? xform.src.height : xform.src.width;
+  const sh = rotSwap ? xform.src.width  : xform.src.height;
+  return Math.max(stageMask._w / sw, stageMask._h / sh);
+}
+
+function clampXformToMask() {
+  if (!xform.src || !stageMask._w || !stageMask._h) return;
+  const minS = minCoverScale();
+  if (xform.s < minS) xform.s = minS;
+  const e = transformedHalfExtents();
+  const maxTx = Math.max(0, e.hw - stageMask._w * 0.5);
+  const maxTy = Math.max(0, e.hh - stageMask._h * 0.5);
+  xform.tx = Math.max(-maxTx, Math.min(maxTx, xform.tx));
+  xform.ty = Math.max(-maxTy, Math.min(maxTy, xform.ty));
+}
+
+function fitToMask() {
+  // Compute scale so the rotated source COVERS the mask entirely (no
+  // letterbox).  When the source aspect doesn't match the mask, the longer
+  // axis spills past the mask — that's intentional, the mask is the crop
+  // window.  Math.max picks the scale that satisfies the tighter axis.
+  layoutMask();
+  if (!xform.src) return;
+  const rotSwap = (xform.rot === 90 || xform.rot === 270);
+  const sw = rotSwap ? xform.src.height : xform.src.width;
+  const sh = rotSwap ? xform.src.width  : xform.src.height;
+  const mw = stageMask._w;
+  const mh = stageMask._h;
+  if (!mw || !mh) return;             // stage not laid out yet, skip
+  xform.s  = Math.max(mw / sw, mh / sh);
+  xform.tx = 0;
+  xform.ty = 0;
+  applyXform();
+  fittedTx = xform.tx;
+  fittedTy = xform.ty;
+  fittedS  = xform.s;
+}
+
+function applyXform() {
+  clampXformToMask();
+  // With transform-origin: 0 0, CSS composes right-to-left, so the rightmost
+  // transform is applied FIRST to a canvas point. Order must be:
+  //   translate(tx,ty) rotate(...) scale(s) translate(-50%,-50%)
+  // -50% is resolved against the *unscaled* canvas box, so putting it first
+  // (rightmost) re-centers the canvas onto its own midpoint BEFORE scale/
+  // rotate. A scale-then-(-50%) order would shift the canvas by (s-1)·W/2,
+  // which is huge for full-resolution phone photos and pushes the image
+  // off-screen.
+  stageCanvas.style.transform =
+    `translate(${xform.tx}px, ${xform.ty}px) ` +
+    `rotate(${xform.rot}deg) ` +
+    `scale(${xform.s}) ` +
+    `translate(-50%, -50%)`;
+  // The transform changed — the cropped region (and therefore the dither
+  // input) is different now.  Debounced so a 60-fps drag doesn't queue
+  // hundreds of dither calls.
+  schedulePreviewUpdate();
+}
+
+document.getElementById('btn-rotate').onclick = () => {
+  xform.rot = (xform.rot + 90) % 360;
+  fitToMask();
+};
+document.getElementById('btn-fit').onclick = () => fitToMask();
+
+// pan + pinch + wheel
+let drag = null;
+stageEl.addEventListener('pointerdown', e => {
+  if (!uploadSheet.classList.contains('upload-crop')) return;
+  stageEl.setPointerCapture(e.pointerId);
+  drag = { id: e.pointerId, x: e.clientX, y: e.clientY, tx: xform.tx, ty: xform.ty };
+});
+stageEl.addEventListener('pointermove', e => {
+  if (drag && drag.id === e.pointerId) {
+    xform.tx = drag.tx + (e.clientX - drag.x);
+    xform.ty = drag.ty + (e.clientY - drag.y);
+    applyXform();
+  }
+});
+stageEl.addEventListener('pointerup',     () => drag = null);
+stageEl.addEventListener('pointercancel', () => drag = null);
+
+stageEl.addEventListener('wheel', e => {
+  if (!uploadSheet.classList.contains('upload-crop')) return;
+  e.preventDefault();
+  const factor = Math.exp(-e.deltaY * 0.001);
+  xform.s = Math.max(0.05, Math.min(20, xform.s * factor));
+  applyXform();
+}, { passive: false });
+
+// two-finger pinch
+let pinch = null;
+stageEl.addEventListener('touchstart', e => {
+  if (!uploadSheet.classList.contains('upload-crop')) return;
+  if (e.touches.length === 2) {
+    const [a, b] = e.touches;
+    pinch = { d: dist(a, b), s: xform.s };
+    drag = null;
+  }
+}, { passive: true });
+stageEl.addEventListener('touchmove', e => {
+  if (!uploadSheet.classList.contains('upload-crop')) return;
+  if (pinch && e.touches.length === 2) {
+    e.preventDefault();
+    const [a, b] = e.touches;
+    const f = dist(a, b) / pinch.d;
+    xform.s = Math.max(0.05, Math.min(20, pinch.s * f));
+    applyXform();
+  }
+}, { passive: false });
+stageEl.addEventListener('touchend', e => { if (e.touches.length < 2) pinch = null; });
+function dist(a, b) {
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+}
+
+
+// Drag to resize the Adjust preview vs. parameter list.  This only changes CSS
+// size; the actual dither input is unchanged and locked after crop.
+let splitDrag = null;
+const splitEl = document.getElementById('adjust-splitter');
+function clampAdjustPreviewHeight() {
+  const box = document.querySelector('.adjust-preview-box');
+  const body = document.querySelector('#sheet-upload .sheet__body');
+  if (!box || !body || !uploadSheet.classList.contains('upload-adjust')) return;
+  const bodyH = body.getBoundingClientRect().height || window.innerHeight;
+  const maxH = Math.min(bodyH - 170, window.innerHeight * 0.68, 520);
+  const cur = box.getBoundingClientRect().height || Math.min(window.innerHeight * 0.5, 390);
+  const nh = Math.max(140, Math.min(maxH, cur));
+  document.documentElement.style.setProperty('--adjust-preview-h', nh + 'px');
+}
+if (splitEl) {
+  splitEl.addEventListener('pointerdown', e => {
+    splitDrag = { y: e.clientY, h: document.querySelector('.adjust-preview-box').getBoundingClientRect().height };
+    splitEl.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  splitEl.addEventListener('pointermove', e => {
+    if (!splitDrag) return;
+    const body = document.querySelector('#sheet-upload .sheet__body');
+    const bodyH = body ? body.getBoundingClientRect().height : window.innerHeight;
+    // Leave room for preset buttons, splitter, and the collapsed Advanced
+    // summary so the handle never pushes controls under the footer.
+    const maxH = Math.min(bodyH - 170, window.innerHeight * 0.68, 520);
+    const nh = Math.max(140, Math.min(maxH, splitDrag.h + (e.clientY - splitDrag.y)));
+    document.documentElement.style.setProperty('--adjust-preview-h', nh + 'px');
+    e.preventDefault();
+  });
+  const endSplit = e => {
+    if (!splitDrag) return;
+    splitDrag = null;
+    try { splitEl.releasePointerCapture(e.pointerId); } catch {}
+  };
+  splitEl.addEventListener('pointerup', endSplit);
+  splitEl.addEventListener('pointercancel', endSplit);
+}
+
+// Send: bake the cropped image as a 400×600 canvas, run WASM dither for the
+// pre-quantised .bin, and upload BOTH the JPG (for browser preview / backup)
+// and the BIN (for direct EPD push).
+document.getElementById('btn-send').onclick = async () => {
+  if (!xform.src) return;
+  const sendBtn = document.getElementById('btn-send');
+  sendBtn.disabled = true;
+  try {
+    toast('Encoding…');
+    const canvas400 = bakeCanvas();
+    // Kick off the JPEG encode in parallel with the dither — they touch
+    // separate data and the JPEG encoder is async.
+    const jpgPromise = new Promise(res =>
+      canvas400.toBlob(b => res(b), 'image/jpeg', 0.85));
+
+    toast('Dithering…');
+    const binBytes = await ditherCanvas(canvas400);
+
+    const jpgBlob = await jpgPromise;
+    if (!jpgBlob) throw new Error('JPEG encode failed');
+
+    const base = uploadBaseOverride || ('p_' + Date.now());
+    // Upload JPG first so the device gallery has it even if the .bin fails.
+    let r = await api.upload(base + '.jpg', jpgBlob, 'image/jpeg');
+    if (!r.ok) throw new Error(await uploadStatusMessage(r, 'JPG'));
+    r = await api.upload(base + '.bin', new Blob([binBytes]), 'application/octet-stream');
+    if (!r.ok) throw new Error(await uploadStatusMessage(r, 'BIN'));
+
+    // Sidecar: per-photo adjust params, so a future Tune cycle starts from
+    // these values rather than the device-wide defaults.  The JSON upload
+    // is small but we DO check its response code — earlier we silenced it
+    // and a device-side failure manifested as "save doesn't work" with no
+    // user feedback.  Failure here is non-fatal (the photo is still on the
+    // device), so we surface a toast and keep going.
+    try {
+      const sidecar = JSON.stringify({adjust: {...perImageAdjust}, mode: outputMode});
+      const r3 = await api.upload(base + '.json', new Blob([sidecar]),
+                                  'application/json');
+      if (!r3.ok) {
+        console.warn('sidecar upload http', r3.status);
+        toast('Save: tune params not stored (' + r3.status + ')');
+      }
+    } catch (e) {
+      console.warn('sidecar upload failed', e);
+      toast('Save: tune params not stored');
+    }
+
+    uploadSheet.classList.remove('is-open');
+    uploadBaseOverride = null;
+    // Refresh the device display to the photo we just baked — same flow for
+    // a brand-new upload and for a re-tune. The .bin fast path on the device
+    // means the panel updates in <1 s after the EPD finishes its hold.
+    try { await api.show(base + '.jpg'); } catch (e) { /* best effort */ }
+    toast('Uploaded — refreshing panel');
+    refresh();
+  } catch (e) {
+    toast(e && e.message ? e.message : 'Upload failed');
+    console.error(e);
+  } finally {
+    sendBtn.disabled = false;
+  }
+};
+
+// Bake the visible crop directly from the source bitmap into an SW × SH
+// output canvas, in ONE browser-resampled drawImage call.
+//
+// The previous revision allocated an intermediate canvas at stage CSS-
+// pixel size (~350×525 on a phone), drew the source into that at
+// xform.s, then upscaled the cropped mask region to SW × SH.  That meant
+// a 4032×3024 source got collapsed to stage resolution first — i.e. the
+// output never carried more detail than what's visible on the phone
+// screen, which is what produced the "looks blurry" complaint.
+//
+// Instead we compose the visible transform with the mask→output mapping
+// into a single CTM and draw the source at its native resolution.  The
+// browser then does a single Lanczos/bicubic resize from source res
+// (millions of pixels) straight to SW × SH (~half a million pixels).
+//
+// Matrix chain (right-to-left, applied to a source pixel):
+//   T(-src_w/2, -src_h/2)   — center source on origin
+//   S(xform.s)              — user zoom
+//   R(xform.rot)            — user rotation
+//   T(mw/2 + tx, mh/2 + ty) — land source center on mask centre (+ pan)
+//   S(SW/mw, SH/mh)         — map the mask area onto the output canvas
+//
+// Verification: with default fit (tx=ty=0, rot=0), source centre (csx, csy)
+// maps to T·R·S applied to (0,0) which is (mw/2, mh/2), then × (SW/mw, SH/mh)
+// = (SW/2, SH/2).  Source centre lands at output centre. ✓
+function bakeCanvas() {
+  const g = normalizedCropGeom(cropGeom || currentCropGeom());
+  const mw = g.mw;
+  const mh = g.mh;
+  const out = document.createElement('canvas');
+  out.width  = SW;
+  out.height = SH;
+  const oc = out.getContext('2d');
+  oc.imageSmoothingEnabled = true;
+  oc.imageSmoothingQuality = 'high';
+  // White fill so any uncovered area maps to "white ink" rather than the
+  // canvas-default transparent (which premultiplies to black).
+  oc.fillStyle = '#fff';
+  oc.fillRect(0, 0, SW, SH);
+
+  oc.save();
+  oc.scale(SW / mw, SH / mh);
+  oc.translate(mw / 2 + g.tx, mh / 2 + g.ty);
+  oc.rotate(g.rot * Math.PI / 180);
+  oc.scale(g.s, g.s);
+  oc.translate(-xform.src.width / 2, -xform.src.height / 2);
+  oc.drawImage(xform.src, 0, 0);
+  oc.restore();
+  return out;
+}
+
+// Hand the SW × SH (1.5× supersample) canvas to WASM, return the packed
+// 4-bit panel framebuffer (Uint8Array of length 120000 = TW × TH / 2).
+async function ditherCanvas(canvasHi) {
+  await loadWasm();
+  if (calib) pushPaletteToWasm();
+
+  const ctx = canvasHi.getContext('2d');
+  const imageData = ctx.getImageData(0, 0, SW, SH);
+  // imageData.data is RGBA8 (4 bytes/px). WASM expects RGB888 — copy the
+  // alpha-stripped buffer into a heap allocation.
+  const rgbLen = SW * SH * 3;
+  const rgbPtr = wasm.malloc(rgbLen);
+  const heap = new Uint8Array(wasm.memory.buffer, rgbPtr, rgbLen);
+  const src = imageData.data;
+  for (let i = 0, j = 0; i < src.length; i += 4, j += 3) {
+    heap[j+0] = src[i+0];
+    heap[j+1] = src[i+1];
+    heap[j+2] = src[i+2];
+  }
+  applyExtraAdjustRgb888(heap, SW, SH);
+
+  // adjust_cfg_t = 7 × int32 in declaration order.  Tint is the magenta-
+  // green axis (between temperature and smoothness); smoothness drives the
+  // solid-fill snap in the dither (see dither.c).
+  const cfgPtr = wasm.malloc(28);
+  const cfgView = new Int32Array(wasm.memory.buffer, cfgPtr, 7);
+  cfgView[0] = perImageAdjust.brightness;
+  cfgView[1] = perImageAdjust.contrast;
+  cfgView[2] = perImageAdjust.saturation;
+  cfgView[3] = perImageAdjust.gamma;
+  cfgView[4] = perImageAdjust.temperature;
+  cfgView[5] = perImageAdjust.tint;
+  cfgView[6] = perImageAdjust.smoothness;
+
+  const packedLen = TW * TH / 2;     // 120000
+  const packedPtr = wasm.malloc(packedLen);
+
+  // Panel resolution (TW, TH); WASM derives the 1.5× source dims internally.
+  // Russian preset uses the pure flat-fill quantiser instead of diffusion.
+  const rc = (outputMode === 'flat-russian' ? wasm.flatFill15x : wasm.dither15x)(
+    rgbPtr, TW, TH, cfgPtr, packedPtr, 0);
+  if (rc !== 0) {
+    wasm.free(rgbPtr); wasm.free(cfgPtr); wasm.free(packedPtr);
+    throw new Error('wasm quantize failed rc=' + rc);
+  }
+
+  // Copy out before freeing — the WASM heap may move on growth.
+  const out = new Uint8Array(packedLen);
+  out.set(new Uint8Array(wasm.memory.buffer, packedPtr, packedLen));
+
+  wasm.free(rgbPtr);
+  wasm.free(cfgPtr);
+  wasm.free(packedPtr);
+  return out;
+}
+
+// ---------- Calibration wizard ----------
+//
+// One inkable at a time, walk the user through:
+//   1) push that solid ink to the panel
+//   2) wait ~30 s for the EPD to settle
+//   3) drag HSL sliders so the on-screen swatch matches the panel
+//   4) save & advance to the next ink
+//
+// Storage stays as RGB triples in calib.palette[name].rgb — the wizard
+// just gives a friendlier way to set those numbers.
+
+const PALETTE_INK_CODE = {  // matches PALETTE_INK_CODE in palette.c
+  black: 0, white: 1, yellow: 2, red: 3, blue: 5, green: 6,
+};
+
+const calibSheet      = document.getElementById('sheet-calib');
+const calibTitle      = document.getElementById('calib-step-title');
+const calibProgress   = document.getElementById('calib-progress');
+const calibSwatchBig  = document.getElementById('calib-swatch-big');
+const calibInstr      = document.getElementById('calib-instructions');
+const calibActionHint = document.getElementById('calib-actions__hint');
+const calibH          = document.getElementById('calib-h');
+const calibS          = document.getElementById('calib-s');
+const calibL          = document.getElementById('calib-l');
+const calibHVal       = document.getElementById('calib-h-val');
+const calibSVal       = document.getElementById('calib-s-val');
+const calibLVal       = document.getElementById('calib-l-val');
+const calibReadout    = document.getElementById('calib-readout');
+const btnCalibShow    = document.getElementById('btn-calib-show');
+const btnCalibPrev    = document.getElementById('btn-calib-prev');
+const btnCalibSkip    = document.getElementById('btn-calib-skip');
+const btnCalibNext    = document.getElementById('btn-calib-next');
+
+let wizardStep = 0;          // 0..5
+let wizardWorking = null;    // working copy of calib.palette so Skip/Cancel won't trash it
+
+function clampInt(v, lo, hi) { return Math.max(lo, Math.min(hi, Math.round(v))); }
+
+// HSL ↔ RGB (sRGB, 0..255 / 0..360 / 0..100).
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h, s, l = (max + min) / 2;
+  if (max === min) { h = 0; s = 0; }
+  else {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h *= 60;
+  }
+  return [Math.round(h), Math.round(s * 100), Math.round(l * 100)];
+}
+function hslToRgb(h, s, l) {
+  h /= 360; s /= 100; l /= 100;
+  if (s === 0) { const v = Math.round(l * 255); return [v, v, v]; }
+  const hue2rgb = (p, q, t) => {
+    if (t < 0) t += 1; if (t > 1) t -= 1;
+    if (t < 1/6) return p + (q - p) * 6 * t;
+    if (t < 0.5) return q;
+    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+    return p;
+  };
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  return [
+    Math.round(hue2rgb(p, q, h + 1/3) * 255),
+    Math.round(hue2rgb(p, q, h)       * 255),
+    Math.round(hue2rgb(p, q, h - 1/3) * 255),
+  ];
+}
+
+function renderWizardChrome() {
+  // Progress dots: done / active / pending
+  calibProgress.innerHTML = '';
+  for (let i = 0; i < PALETTE_ORDER.length; i++) {
+    const dot = document.createElement('span');
+    if (i < wizardStep) dot.classList.add('is-done');
+    else if (i === wizardStep) dot.classList.add('is-active');
+    calibProgress.appendChild(dot);
+  }
+  const name = PALETTE_ORDER[wizardStep];
+  calibTitle.textContent = `Calibrate ${name.toUpperCase()} (${wizardStep + 1}/${PALETTE_ORDER.length})`;
+  btnCalibPrev.disabled = wizardStep === 0;
+  btnCalibNext.textContent = wizardStep === PALETTE_ORDER.length - 1 ? 'Save' : 'Next →';
+  calibActionHint.textContent = '';
+}
+
+function renderWizardColor() {
+  const name = PALETTE_ORDER[wizardStep];
+  const [r, g, b] = wizardWorking[name].rgb;
+  const css = `rgb(${r},${g},${b})`;
+  calibSwatchBig.style.background = css;
+  calibReadout.textContent = css;
+  const [h, s, l] = rgbToHsl(r, g, b);
+  calibH.value = h; calibHVal.textContent = h + '°';
+  calibS.value = s; calibSVal.textContent = s + '%';
+  calibL.value = l; calibLVal.textContent = l + '%';
+}
+
+function updateFromSliders() {
+  const h = +calibH.value, s = +calibS.value, l = +calibL.value;
+  calibHVal.textContent = h + '°';
+  calibSVal.textContent = s + '%';
+  calibLVal.textContent = l + '%';
+  const [r, g, b] = hslToRgb(h, s, l);
+  const name = PALETTE_ORDER[wizardStep];
+  wizardWorking[name].rgb = [r, g, b];
+  const css = `rgb(${r},${g},${b})`;
+  calibSwatchBig.style.background = css;
+  calibReadout.textContent = css;
+}
+calibH.addEventListener('input', updateFromSliders);
+calibS.addEventListener('input', updateFromSliders);
+calibL.addEventListener('input', updateFromSliders);
+
+btnCalibShow.onclick = async () => {
+  const name = PALETTE_ORDER[wizardStep];
+  const ink = PALETTE_INK_CODE[name];
+  try {
+    btnCalibShow.disabled = true;
+    calibActionHint.textContent = 'Sent. Watch the panel — refresh takes ~30 s.';
+    const r = await fetch('/api/calib-fill?ink=' + ink, {method: 'POST'});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+  } catch (e) {
+    calibActionHint.textContent = 'Send failed: ' + e.message;
+  } finally {
+    setTimeout(() => { btnCalibShow.disabled = false; }, 1500);
+  }
+};
+
+btnCalibPrev.onclick = () => {
+  if (wizardStep > 0) { wizardStep--; renderWizardChrome(); renderWizardColor(); }
+};
+btnCalibSkip.onclick = () => {
+  if (wizardStep < PALETTE_ORDER.length - 1) {
+    wizardStep++; renderWizardChrome(); renderWizardColor();
+  } else {
+    saveAndClose(false);
+  }
+};
+btnCalibNext.onclick = async () => {
+  if (wizardStep < PALETTE_ORDER.length - 1) {
+    wizardStep++; renderWizardChrome(); renderWizardColor();
+  } else {
+    await saveAndClose(true);
+  }
+};
+
+async function saveAndClose(notify) {
+  calib.palette = wizardWorking;
+  try {
+    const r = await api.setCalib(calib);
+    if (!r.ok) throw new Error('save ' + r.status);
+    pushPaletteToWasm();
+    if (notify) toast('Calibration saved');
+    calibSheet.classList.remove('is-open');
+  } catch (e) {
+    toast('Save failed');
+    console.error(e);
+  }
+}
+
+document.getElementById('row-open-calib').onclick = () => {
+  if (!calib) calib = JSON.parse(JSON.stringify(CALIB_FALLBACK));
+  // Work on a copy so cancelling the sheet leaves NVS untouched.
+  wizardWorking = JSON.parse(JSON.stringify(calib.palette));
+  wizardStep = 0;
+  renderWizardChrome();
+  renderWizardColor();
+  calibSheet.classList.add('is-open');
+};
+
+// File picker → decode → openUpload
+filePicker.onchange = async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try {
+    const bmp = await createImageBitmap(f);
+    openUpload(bmp);
+  } catch (err) {
+    toast('Cannot read image');
+    console.error(err);
+  }
+  filePicker.value = '';
+};
+document.getElementById('btn-upload').onclick = () => filePicker.click();
+
+// ---------- bootstrap ----------
+(async function start() {
+  refresh();
+  await loadCalib();
+  // Warm the WASM module in parallel so the first upload doesn't pay the
+  // 24 KB fetch + instantiation cost interactively.
+  loadWasm().then(() => {
+    pushPaletteToWasm();
+  }).catch(err => {
+    console.error('wasm load failed', err);
+    toast('Dither WASM failed — uploads will be slower');
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+CONFIG_IDF_TARGET="esp32s3"
+
+# PSRAM: 8MB Octal (default for ESP32-S3-WROOM-1-N16R8). Switch
+# CONFIG_SPIRAM_MODE_QUAD=y in menuconfig if the board uses Quad PSRAM.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_USE_MALLOC=y
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
+CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
+CONFIG_SPIRAM_RODATA=y
+
+# Flash size (16MB on N16R8 modules — change to match your module)
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
+
+# 2 MB app + remaining flash as SPIFFS fallback storage.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# Compiler: -O2 for the floating-point heavy dither loop
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+# Larger default stack for main task — the dither loop uses ~10KB
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
+
+# Keep brown-out detector but raise reset threshold for E-Ink panel
+# inrush (deep sleep wake then big SPI burst).
+CONFIG_ESP_BROWNOUT_DET_LVL_SEL_7=y
+
+# FATFS over SDSPI
+CONFIG_FATFS_LFN_HEAP=y
+CONFIG_FATFS_MAX_LFN=255
+CONFIG_FATFS_API_ENCODING_UTF_8=y
+
+# SPIFFS fallback stores /spiffs/<name>; allow paths longer than the default
+# 32-byte object name.
+CONFIG_SPIFFS_OBJ_NAME_LEN=128
+
+# Log level
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+
+# WiFi: SoftAP only (open network) — enough for captive portal photo upload.
+CONFIG_ESP_WIFI_ENABLED=y
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=y
+CONFIG_ESP_WIFI_NVS_ENABLED=y
+
+# LWIP: enable extras the HTTP server / DNS hijack need.
+CONFIG_LWIP_MAX_SOCKETS=10
+CONFIG_LWIP_SO_RCVBUF=y
+
+# HTTP server: bigger header / URI limits for /api/upload/<long-name>
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
+CONFIG_HTTPD_MAX_URI_LEN=256
+
+# Increase httpd recv buffer to absorb multi-KB JPG chunks without yielding.
+CONFIG_HTTPD_PURGE_BUF_LEN=64

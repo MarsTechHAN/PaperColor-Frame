@@ -1,0 +1,53 @@
+# macOS / editor
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# ESP-IDF / CMake build outputs
+build/
+managed_components/
+sdkconfig.old
+dependencies.lock
+
+# Local caches
+.cache/
+.clangd/
+
+# C / native build artifacts
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.elf
+*.map
+*.bin_timestamp
+
+# Host test generated binaries and previews
+host_test/host_test
+host_test/*.o
+host_test/*_preview.bmp
+host_test/*_preview.png
+host_test/*_indices.bin
+host_test/out_*.bmp
+host_test/out_*.png
+host_test/out_*.bin
+host_test/c_*.bmp
+host_test/c_*.png
+host_test/c_*.bin
+host_test/py_out*.bmp
+host_test/py_out*.png
+host_test/py_out*.bin
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
