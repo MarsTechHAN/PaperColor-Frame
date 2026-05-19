@@ -16,6 +16,9 @@ PaperColor Paintings 是一个面向 ESP32-S3 与 6 色电子纸屏的照片显�
 ```text
 .
 ├── CMakeLists.txt          # ESP-IDF 顶层工程入口
+├── doc/                    # 算法与实现文档
+│   ├── pipeline.md         # 图像处理流水线与颜色科学说明
+│   └── implementation.md   # WASM、Web UI、设备端实现流程
 ├── main/                   # 固件源码、驱动、Web 资源
 │   ├── web/                # 设备内置 Web UI 与 dither.wasm
 │   ├── color_pipeline.*    # 颜色空间与调色处理
@@ -25,9 +28,13 @@ PaperColor Paintings 是一个面向 ESP32-S3 与 6 色电子纸屏的照片显�
 │   └── wifi_ap.*           # SoftAP 初始化
 ├── web_wasm/               # WASM 抖动模块构建与 smoke test
 ├── partitions.csv          # 分区表
-├── sdkconfig.defaults      # 默认配置
-└── pipeline.md             # 图片处理流水线记录
+└── sdkconfig.defaults      # 默认配置
 ```
+
+## 文档导航
+
+- [图像处理 Pipeline](doc/pipeline.md)：完整解释 RGB 图片到 6 色 EINK framebuffer 的处理流程、颜色科学、CIEDE2000、误差扩散、局部 refinement，以及 Russian 纯色块 pipeline。
+- [实现说明](doc/implementation.md)：说明 Web UI 两阶段流程、WASM ABI、preview/send 调用链、上传文件、设备端显示 fallback、构建与测试方式。
 
 ## 环境要求
 
