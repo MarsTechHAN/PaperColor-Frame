@@ -681,7 +681,7 @@ input[type=file] { display: none; }
     </div>
     <div class="stage-tools adjust-step">
       <div class="adjust-preview-box">
-        <canvas id="preview-canvas" width="200" height="300" title="Tap to toggle source / dithered"></canvas>
+        <canvas id="preview-canvas" width="400" height="600" title="Tap to toggle source / dithered"></canvas>
       </div>
       <div class="stage-tools__buttons">
         <div id="preview-status">Dithered preview</div>
@@ -1578,12 +1578,11 @@ function applyPanelPreviewOptics(img) {
 // applies the adjust IN PLACE on its input buffer and writes the palette
 // indices to indices_opt — so one round-trip yields *both* preview images.
 //
-// Resolution is 200×300 (half panel) using the 1×1 dither path; it's not
-// quite the 1.5×-supersample algorithm the final Send runs, but it lands
-// at ~30 ms on a phone vs ~500 ms for the supersample, and the visual
-// match is close enough for interactive feedback.
+// Resolution is the full native panel grid (400×600).  This costs more than
+// the old half-size preview, but avoids preview-only resampling artefacts and
+// makes edge/detail decisions match the final panel framebuffer much better.
 
-const PREVIEW_W = 200, PREVIEW_H = 300;
+const PREVIEW_W = TW, PREVIEW_H = TH;
 let previewMode = 'dithered'; // 'source' | 'dithered'
 let previewSourceImg = null;
 let previewDitherImg = null;

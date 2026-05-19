@@ -19,7 +19,7 @@ export PATH="$(dirname "$PYTHON"):$PATH"
 EMCC="$PYTHON $EMSDK/libexec/emcc.py"
 
 MAIN=../main
-SHIM=../host_test/include_shim
+SHIM=include_shim
 OUT=../main/web/dither.wasm
 
 # Standalone WASM (no JS runtime): we explicitly export wasm_init,
