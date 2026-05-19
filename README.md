@@ -10,7 +10,6 @@ PaperColor Paintings 是一个面向 ESP32-S3 与 6 色电子纸屏的照片显�
 - SoftAP + DNS 劫持，便于作为离线相框/展示设备使用。
 - 优先使用 SD 卡保存照片，SD 不可用时可回退到内部 SPIFFS。
 - 提供浏览器端 WASM 抖动模块，便于上传前预处理和预览。
-- 提供 host_test 本地验证工具，用于对照调色和抖动算法输出。
 
 ## 目录结构
 
@@ -25,8 +24,6 @@ PaperColor Paintings 是一个面向 ESP32-S3 与 6 色电子纸屏的照片显�
 │   ├── http_server.*       # 本地 Web 服务
 │   └── wifi_ap.*           # SoftAP 初始化
 ├── web_wasm/               # WASM 抖动模块构建与 smoke test
-├── host_test/              # 桌面端算法验证工具与参考脚本
-├── dist/                   # 可选发布固件二进制
 ├── partitions.csv          # 分区表
 ├── sdkconfig.defaults      # 默认配置
 └── pipeline.md             # 图片处理流水线记录
@@ -36,8 +33,7 @@ PaperColor Paintings 是一个面向 ESP32-S3 与 6 色电子纸屏的照片显�
 
 - ESP-IDF 5.x（工程依赖 ESP32-S3 目标）。
 - Python 与 ESP-IDF 工具链已正确安装并导出环境变量。
-- 如需重新构建 `main/web/dither.wasm`，需要本机安装 Emscripten；当前脚本默认使用 Homebrew 路径 `/opt/homebrew/Cellar/emscripten/5.0.7`。
-- 如需运行 host 侧测试，建议安装 `clang` 与 `make`。
+- 构建 `main/web/dither.wasm` 需要本机安装 Emscripten；当前脚本默认使用 Homebrew 路径 `/opt/homebrew/Cellar/emscripten/5.0.7`。
 
 ## 构建固件
 
@@ -45,11 +41,12 @@ PaperColor Paintings 是一个面向 ESP32-S3 与 6 色电子纸屏的照片显�
 
 ```bash
 . "$HOME/esp/esp-idf/export.sh"
+./web_wasm/build.sh
 idf.py set-target esp32s3
 idf.py build
 ```
 
-构建产物会生成在 `build/`，该目录不纳入 Git。`main/CMakeLists.txt` 会在固件构建时将 `main/web/index.html` 与 `main/web/dither.wasm` gzip 后嵌入固件。
+构建产物会生成在 `build/`，本地配置会生成在 `sdkconfig`，这些文件不纳入 Git。`main/CMakeLists.txt` 会在固件构建时将 `main/web/index.html` 与 `main/web/dither.wasm` gzip 后嵌入固件。
 
 ## 烧录与监控
 
@@ -68,17 +65,7 @@ idf.py -p /dev/tty.usbmodemXXXX flash monitor
 node web_wasm/smoke_test.mjs
 ```
 
-`build.sh` 会生成 `main/web/dither.wasm`，该文件会随固件一起嵌入。
-
-## 本地算法验证
-
-```bash
-cd host_test
-make
-./host_test --raw demo_5_21.raw
-```
-
-生成的预览图、索引文件、对象文件和可执行文件属于本地测试产物，已通过 `.gitignore` 排除。
+`build.sh` 会生成 `main/web/dither.wasm`，该文件属于中间产物，不提交到 Git。
 
 ## Git 与子模块说明
 
@@ -86,6 +73,6 @@ make
 
 ## 维护约定
 
-- 源码、配置、Web 资源和必要的发布二进制可以提交。
-- `build/`、本地缓存、对象文件和测试生成图不提交。
-- 修改调色或抖动算法后，建议同时运行 WASM smoke test 与 host 侧对照测试。
+- 只提交源码、默认配置、Web 源文件和说明文档。
+- `build/`、`dist/`、`host_test/`、`sdkconfig`、`main/web/dither.wasm`、本地缓存和对象文件不提交。
+- 修改调色或抖动算法后，建议重新构建 WASM 并运行 smoke test。

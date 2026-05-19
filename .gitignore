@@ -11,9 +11,12 @@
 
 # ESP-IDF / CMake build outputs
 build/
+dist/
 managed_components/
+sdkconfig
 sdkconfig.old
 dependencies.lock
+main/web/dither.wasm
 
 # Local caches
 .cache/
@@ -31,21 +34,8 @@ dependencies.lock
 *.map
 *.bin_timestamp
 
-# Host test generated binaries and previews
-host_test/host_test
-host_test/*.o
-host_test/*_preview.bmp
-host_test/*_preview.png
-host_test/*_indices.bin
-host_test/out_*.bmp
-host_test/out_*.png
-host_test/out_*.bin
-host_test/c_*.bmp
-host_test/c_*.png
-host_test/c_*.bin
-host_test/py_out*.bmp
-host_test/py_out*.png
-host_test/py_out*.bin
+# Local test / generated data
+host_test/
 
 # Logs and temporary files
 *.log
