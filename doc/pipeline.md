@@ -1,4 +1,4 @@
-# Paper E6 图像处理 Pipeline
+# PaperColor Frame 图像处理 Pipeline
 
 本文档解释 RGB 图片到 6 色 EINK Spectra / PaperColor 面板的整体处理流程、颜色科学假设、数学目标函数，以及当前两类输出 pipeline：默认照片 dithering pipeline 与 Russian 纯色块 pipeline。
 

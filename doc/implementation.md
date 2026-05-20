@@ -1,4 +1,4 @@
-# Paper E6 实现说明
+# PaperColor Frame 实现说明
 
 本文档描述项目中浏览器、WASM、ESP32 固件、文件存储和电子纸刷新之间的具体实现关系。算法原理见 [`pipeline.md`](pipeline.md)。
 

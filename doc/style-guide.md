@@ -1,6 +1,6 @@
-# Paper E6 Web UI Style Guide
+# PaperColor Frame Web UI Style Guide
 
-本文档记录 Paper E6 内置 Web UI 的视觉、交互和文案规则。目标是让手机端界面保持一致：像一面可触摸的拍立得照片墙，同时足够清楚、可操作、可本地化。
+本文档记录 PaperColor Frame 内置 Web UI 的视觉、交互和文案规则。目标是让手机端界面保持一致：像一面可触摸的拍立得照片墙，同时足够清楚、可操作、可本地化。
 
 ## 设计目标
 

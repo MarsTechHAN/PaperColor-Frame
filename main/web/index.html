@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>PaperColor Prints</title>
+<title>PaperColor Frame</title>
 <style>
 :root {
   --paper: #f4e7d1;
@@ -1425,7 +1425,7 @@ input[type=file] { display: none; }
   <div class="paper-utility">
     <div class="paper-utility__left">
       <span class="dot" id="conn-dot"></span>
-      <span id="conn-label" data-i18n="app.device">PaperColor Prints</span>
+      <span id="conn-label" data-i18n="app.device">PaperColor Frame</span>
     </div>
     <div class="paper-utility__right">
       <button id="btn-settings" class="icon-button" type="button" aria-label="Settings" data-i18n-aria="app.settings">
@@ -2218,7 +2218,7 @@ const firmwareVersionEl = document.getElementById('firmware-version');
 const firmwareBuildTimeEl = document.getElementById('firmware-build-time');
 let wifiSsidText = 'PaperColor';
 let wifiPasswordSet = false;
-let firmwareVersionText = 'PaperColor Prints';
+let firmwareVersionText = 'PaperColor Frame';
 let firmwareBuildTimeText = '';
 
 function fmtInterval(s) {
@@ -2252,7 +2252,7 @@ function applyConfigToControls(cfg) {
   if (ledBrightnessRange && Number.isFinite(+cfg.status_led_brightness)) ledBrightnessRange.value = cfg.status_led_brightness;
   if ('wifi_ap_ssid' in cfg) wifiSsidText = cfg.wifi_ap_ssid || 'PaperColor';
   if ('wifi_ap_password_set' in cfg) wifiPasswordSet = !!cfg.wifi_ap_password_set;
-  if ('fw_version' in cfg) firmwareVersionText = cfg.fw_version || 'PaperColor Prints';
+  if ('fw_version' in cfg) firmwareVersionText = cfg.fw_version || 'PaperColor Frame';
   if ('build_time' in cfg) firmwareBuildTimeText = cfg.build_time || '';
 }
 function syncSettingsReadouts(cfg) {

@@ -445,7 +445,7 @@ static esp_err_t send_config_json_with_version(httpd_req_t *req)
              (unsigned)config_get_status_led_brightness(),
              config_get_wifi_ap_ssid(),
              (ap_password && ap_password[0]) ? "true" : "false",
-             app ? app->version : "PaperColor Prints",
+             app ? app->version : "PaperColor Frame",
              app ? app->date : "",
              app ? app->time : "");
     return send_json(req, body);
@@ -513,8 +513,8 @@ static esp_err_t h_config(httpd_req_t *req)
 // httpd task.
 static const char CAPTIVE_STUB[] =
     "<!doctype html><meta http-equiv=\"refresh\" content=\"0;url=/\">"
-    "<title>PaperColor Prints</title>"
-    "<a href=\"/\">PaperColor Prints</a>";
+    "<title>PaperColor Frame</title>"
+    "<a href=\"/\">PaperColor Frame</a>";
 
 static esp_err_t h_catch_all(httpd_req_t *req)
 {
