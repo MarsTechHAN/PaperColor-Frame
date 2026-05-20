@@ -2,6 +2,8 @@
 
 #include "config_store.h"
 
+#include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "nvs_flash.h"
@@ -12,8 +14,36 @@ static const char *TAG     = "config_store";
 static const char *NS      = "paper_e6";
 static const char *K_LOOP  = "loop_int";
 static const char *K_CALIB = "calib_json";
+static const char *K_WIFI_IDLE_SLEEP = "wifi_sleep";
+static const char *K_BUTTON_SLEEP    = "btn_sleep";
+static const char *K_STATUS_LED      = "led_bright";
+static const char *K_WIFI_AP_PASS    = "ap_pass";
 
 static uint32_t s_loop_interval_s = CONFIG_LOOP_INTERVAL_DEFAULT;
+static uint32_t s_wifi_idle_sleep_s = CONFIG_WIFI_IDLE_SLEEP_DEFAULT_S;
+static uint32_t s_button_sleep_s = CONFIG_BUTTON_SLEEP_DEFAULT_S;
+static uint8_t  s_status_led_brightness = CONFIG_STATUS_LED_BRIGHTNESS_DEFAULT;
+static char     s_wifi_ap_password[CONFIG_WIFI_AP_PASSWORD_MAX_LEN + 1] = {0};
+
+static uint32_t clamp_u32(uint32_t v, uint32_t lo, uint32_t hi)
+{
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+
+static bool wifi_ap_password_is_valid(const char *password)
+{
+    if (!password) return false;
+    size_t len = strlen(password);
+    if (len == 0) return true;            // Empty means open AP.
+    if (len < 8 || len > CONFIG_WIFI_AP_PASSWORD_MAX_LEN) return false;
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)password[i];
+        if (c < 32 || c > 126) return false;
+    }
+    return true;
+}
 
 // Default calibration JSON shipped with the firmware.  Only RGB is stored —
 // LAB is derived at dither time from the same C/WASM rgb_to_lab_u8() that
@@ -48,14 +78,24 @@ static const char DEFAULT_CALIB_JSON[] =
   "\"brightness\":0,"
   "\"exposure\":0,"
   "\"contrast\":106,"
-  "\"saturation\":106,"
-  "\"vibrance\":24,"
+  "\"saturation\":136,"
+  "\"vibrance\":64,"
   "\"gamma\":96,"
   "\"temperature\":106,"
   "\"tint\":99,"
   "\"smoothness\":10,"
   "\"sharpen\":34,"
   "\"vignette\":14"
+"},"
+// Browser-side Auto carries an exposure-target compensation to protect
+// Spectra 6 highlights.  Temperature bias is in the same slider units as the
+// manual Temperature control.
+"\"auto\":{"
+  "\"exposureBias\":-33,"
+  "\"temperatureBias\":0"
+"},"
+"\"pipeline\":{"
+  "\"ditherMode\":\"e6-mix\""
 "}"
 "}";
 
@@ -76,13 +116,40 @@ int config_store_init(void)
         if (nvs_get_u32(h, K_LOOP, &v) == ESP_OK) {
             s_loop_interval_s = v;
         }
+        if (nvs_get_u32(h, K_WIFI_IDLE_SLEEP, &v) == ESP_OK) {
+            s_wifi_idle_sleep_s = v;
+        }
+        if (nvs_get_u32(h, K_BUTTON_SLEEP, &v) == ESP_OK) {
+            s_button_sleep_s = v;
+        }
+        if (nvs_get_u32(h, K_STATUS_LED, &v) == ESP_OK) {
+            s_status_led_brightness = (uint8_t)v;
+        }
+        size_t pass_len = sizeof s_wifi_ap_password;
+        if (nvs_get_str(h, K_WIFI_AP_PASS, s_wifi_ap_password, &pass_len) != ESP_OK ||
+            !wifi_ap_password_is_valid(s_wifi_ap_password)) {
+            s_wifi_ap_password[0] = 0;
+        }
         nvs_close(h);
     }
-    if (s_loop_interval_s < CONFIG_LOOP_INTERVAL_MIN_S
-        || s_loop_interval_s > CONFIG_LOOP_INTERVAL_MAX_S) {
-        s_loop_interval_s = CONFIG_LOOP_INTERVAL_DEFAULT;
-    }
-    ESP_LOGI(TAG, "loop_interval_s=%u", (unsigned)s_loop_interval_s);
+    s_loop_interval_s = clamp_u32(s_loop_interval_s,
+                                  CONFIG_LOOP_INTERVAL_MIN_S,
+                                  CONFIG_LOOP_INTERVAL_MAX_S);
+    s_wifi_idle_sleep_s = clamp_u32(s_wifi_idle_sleep_s,
+                                    CONFIG_WIFI_IDLE_SLEEP_MIN_S,
+                                    CONFIG_WIFI_IDLE_SLEEP_MAX_S);
+    s_button_sleep_s = clamp_u32(s_button_sleep_s,
+                                 CONFIG_BUTTON_SLEEP_MIN_S,
+                                 CONFIG_BUTTON_SLEEP_MAX_S);
+    s_status_led_brightness = (uint8_t)clamp_u32(s_status_led_brightness,
+                                                 CONFIG_STATUS_LED_BRIGHTNESS_MIN,
+                                                 CONFIG_STATUS_LED_BRIGHTNESS_MAX);
+    ESP_LOGI(TAG, "config: loop=%us wifi_sleep=%us button_sleep=%us led=%u ap_pass=%s",
+             (unsigned)s_loop_interval_s,
+             (unsigned)s_wifi_idle_sleep_s,
+             (unsigned)s_button_sleep_s,
+             (unsigned)s_status_led_brightness,
+             s_wifi_ap_password[0] ? "set" : "open");
     return 0;
 }
 
@@ -93,14 +160,90 @@ uint32_t config_get_loop_interval_s(void)
 
 int config_set_loop_interval_s(uint32_t s)
 {
-    if (s < CONFIG_LOOP_INTERVAL_MIN_S) s = CONFIG_LOOP_INTERVAL_MIN_S;
-    if (s > CONFIG_LOOP_INTERVAL_MAX_S) s = CONFIG_LOOP_INTERVAL_MAX_S;
+    s = clamp_u32(s, CONFIG_LOOP_INTERVAL_MIN_S, CONFIG_LOOP_INTERVAL_MAX_S);
     s_loop_interval_s = s;
     nvs_handle_t h;
     if (nvs_open(NS, NVS_READWRITE, &h) != ESP_OK) return -1;
     nvs_set_u32(h, K_LOOP, s);
     nvs_commit(h);
     nvs_close(h);
+    return 0;
+}
+
+uint32_t config_get_wifi_idle_sleep_s(void)
+{
+    return s_wifi_idle_sleep_s;
+}
+
+int config_set_wifi_idle_sleep_s(uint32_t s)
+{
+    s = clamp_u32(s, CONFIG_WIFI_IDLE_SLEEP_MIN_S, CONFIG_WIFI_IDLE_SLEEP_MAX_S);
+    s_wifi_idle_sleep_s = s;
+    nvs_handle_t h;
+    if (nvs_open(NS, NVS_READWRITE, &h) != ESP_OK) return -1;
+    nvs_set_u32(h, K_WIFI_IDLE_SLEEP, s);
+    nvs_commit(h);
+    nvs_close(h);
+    return 0;
+}
+
+uint32_t config_get_button_sleep_s(void)
+{
+    return s_button_sleep_s;
+}
+
+int config_set_button_sleep_s(uint32_t s)
+{
+    s = clamp_u32(s, CONFIG_BUTTON_SLEEP_MIN_S, CONFIG_BUTTON_SLEEP_MAX_S);
+    s_button_sleep_s = s;
+    nvs_handle_t h;
+    if (nvs_open(NS, NVS_READWRITE, &h) != ESP_OK) return -1;
+    nvs_set_u32(h, K_BUTTON_SLEEP, s);
+    nvs_commit(h);
+    nvs_close(h);
+    return 0;
+}
+
+uint8_t config_get_status_led_brightness(void)
+{
+    return s_status_led_brightness;
+}
+
+int config_set_status_led_brightness(uint32_t brightness)
+{
+    brightness = clamp_u32(brightness,
+                           CONFIG_STATUS_LED_BRIGHTNESS_MIN,
+                           CONFIG_STATUS_LED_BRIGHTNESS_MAX);
+    s_status_led_brightness = (uint8_t)brightness;
+    nvs_handle_t h;
+    if (nvs_open(NS, NVS_READWRITE, &h) != ESP_OK) return -1;
+    nvs_set_u32(h, K_STATUS_LED, brightness);
+    nvs_commit(h);
+    nvs_close(h);
+    return 0;
+}
+
+const char *config_get_wifi_ap_ssid(void)
+{
+    return CONFIG_WIFI_AP_SSID_DEFAULT;
+}
+
+const char *config_get_wifi_ap_password(void)
+{
+    return s_wifi_ap_password;
+}
+
+int config_set_wifi_ap_password(const char *password)
+{
+    if (!wifi_ap_password_is_valid(password)) return -1;
+    nvs_handle_t h;
+    if (nvs_open(NS, NVS_READWRITE, &h) != ESP_OK) return -1;
+    esp_err_t e = nvs_set_str(h, K_WIFI_AP_PASS, password);
+    if (e == ESP_OK) e = nvs_commit(h);
+    nvs_close(h);
+    if (e != ESP_OK) return -1;
+    strncpy(s_wifi_ap_password, password, sizeof s_wifi_ap_password - 1);
+    s_wifi_ap_password[sizeof s_wifi_ap_password - 1] = 0;
     return 0;
 }
 

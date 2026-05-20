@@ -1,8 +1,11 @@
-// wifi_ap.c — Bring up an open SoftAP for the captive-portal UI.  Pure
+// wifi_ap.c — Bring up a SoftAP for the captive-portal UI.  Pure
 // offline; no STA, no NAT, no upstream Internet.
 
 #include "wifi_ap.h"
+#include "config_store.h"
 
+#include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 #include "esp_event.h"
 #include "esp_log.h"
@@ -14,15 +17,18 @@
 static const char *TAG = "wifi_ap";
 static esp_netif_t *s_ap_netif = NULL;
 static uint32_t     s_ap_ip    = 0;
+static volatile int s_station_count = 0;
 
 static void on_wifi_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
     (void)arg; (void)base; (void)data;
     if (id == WIFI_EVENT_AP_STACONNECTED) {
         wifi_event_ap_staconnected_t *e = data;
+        if (s_station_count < WIFI_AP_MAX_CONN) s_station_count++;
         ESP_LOGI(TAG, "station joined: " MACSTR " aid=%d", MAC2STR(e->mac), e->aid);
     } else if (id == WIFI_EVENT_AP_STADISCONNECTED) {
         wifi_event_ap_stadisconnected_t *e = data;
+        if (s_station_count > 0) s_station_count--;
         ESP_LOGI(TAG, "station left: "  MACSTR " aid=%d", MAC2STR(e->mac), e->aid);
     }
 }
@@ -42,16 +48,25 @@ esp_netif_t *wifi_ap_start(void)
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
         WIFI_EVENT, ESP_EVENT_ANY_ID, &on_wifi_event, NULL, NULL));
 
+    const char *ssid = config_get_wifi_ap_ssid();
+    const char *password = config_get_wifi_ap_password();
+    bool has_password = password && password[0];
+
     wifi_config_t ap_cfg = {
         .ap = {
-            .ssid           = WIFI_AP_SSID,
-            .ssid_len       = strlen(WIFI_AP_SSID),
             .channel        = WIFI_AP_CHANNEL,
             .max_connection = WIFI_AP_MAX_CONN,
-            .authmode       = WIFI_AUTH_OPEN,
             .pmf_cfg        = { .required = false },
         },
     };
+    snprintf((char *)ap_cfg.ap.ssid, sizeof ap_cfg.ap.ssid, "%s", ssid);
+    ap_cfg.ap.ssid_len = strlen((const char *)ap_cfg.ap.ssid);
+    if (has_password) {
+        snprintf((char *)ap_cfg.ap.password, sizeof ap_cfg.ap.password, "%s", password);
+        ap_cfg.ap.authmode = WIFI_AUTH_WPA2_PSK;
+    } else {
+        ap_cfg.ap.authmode = WIFI_AUTH_OPEN;
+    }
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_cfg));
     ESP_ERROR_CHECK(esp_wifi_start());
@@ -60,12 +75,19 @@ esp_netif_t *wifi_ap_start(void)
     esp_netif_ip_info_t ip = {0};
     esp_netif_get_ip_info(s_ap_netif, &ip);
     s_ap_ip = ip.ip.addr;
-    ESP_LOGI(TAG, "SoftAP up: ssid=%s ip=" IPSTR " ch=%d",
-             WIFI_AP_SSID, IP2STR(&ip.ip), WIFI_AP_CHANNEL);
+    ESP_LOGI(TAG, "SoftAP up: ssid=%s security=%s ip=" IPSTR " ch=%d",
+             (const char *)ap_cfg.ap.ssid,
+             has_password ? "wpa2" : "open",
+             IP2STR(&ip.ip), WIFI_AP_CHANNEL);
     return s_ap_netif;
 }
 
 uint32_t wifi_ap_get_ip(void)
 {
     return s_ap_ip;
+}
+
+int wifi_ap_station_count(void)
+{
+    return s_station_count;
 }

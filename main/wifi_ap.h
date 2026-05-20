@@ -8,17 +8,19 @@
 extern "C" {
 #endif
 
-// SSID broadcast by the captive-portal AP.
-#define WIFI_AP_SSID     "PaperE6"
+// Captive-portal AP channel and capacity. SSID/password come from config_store.
 #define WIFI_AP_CHANNEL  6
-#define WIFI_AP_MAX_CONN 4
+#define WIFI_AP_MAX_CONN 1
 
-// Bring up SoftAP with no password (open) on a fixed channel.  Returns the
-// AP esp_netif handle so other modules (DNS hijack) can query the AP IP.
+// Bring up SoftAP on a fixed channel. Empty configured password means open AP.
+// Returns the AP esp_netif handle so other modules can query the AP IP.
 esp_netif_t *wifi_ap_start(void);
 
 // AP gateway IP in network byte order (for the DNS hijack reply).
 uint32_t     wifi_ap_get_ip(void);
+
+// Number of currently associated stations.  The AP is configured for one.
+int          wifi_ap_station_count(void);
 
 #ifdef __cplusplus
 }

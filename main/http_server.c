@@ -16,10 +16,12 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <sys/stat.h>
 
 #include "esp_http_server.h"
 #include "esp_log.h"
+#include "esp_app_desc.h"
 
 #include "photo_store.h"
 #include "config_store.h"
@@ -32,6 +34,8 @@ extern const uint8_t INDEX_GZ_START[] asm("_binary_index_html_gz_start");
 extern const uint8_t INDEX_GZ_END[]   asm("_binary_index_html_gz_end");
 extern const uint8_t WASM_GZ_START[]  asm("_binary_dither_wasm_gz_start");
 extern const uint8_t WASM_GZ_END[]    asm("_binary_dither_wasm_gz_end");
+extern const uint8_t I18N_GZ_START[]  asm("_binary_i18n_js_gz_start");
+extern const uint8_t I18N_GZ_END[]    asm("_binary_i18n_js_gz_end");
 
 // -------------------------------------------------------------------- helpers
 static esp_err_t send_text(httpd_req_t *req, const char *status,
@@ -75,6 +79,43 @@ static int url_tail_name(const char *uri, const char *prefix,
     return 0;
 }
 
+static int json_get_string_field(const char *json, const char *key,
+                                 char *out, size_t out_sz)
+{
+    if (!json || !key || !out || out_sz == 0) return -1;
+    char needle[48];
+    int nn = snprintf(needle, sizeof needle, "\"%s\"", key);
+    if (nn < 0 || nn >= (int)sizeof needle) return -1;
+    const char *p = strstr(json, needle);
+    if (!p) return 0;
+    p += nn;
+    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+    if (*p++ != ':') return -1;
+    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+    if (*p++ != '"') return -1;
+
+    size_t n = 0;
+    while (*p && *p != '"') {
+        unsigned char c = (unsigned char)*p++;
+        if (c == '\\') {
+            c = (unsigned char)*p++;
+            if (c == '"' || c == '\\' || c == '/') {
+                // Keep escaped printable character as-is.
+            } else if (c == 'n' || c == 'r' || c == 't' ||
+                       c == 'b' || c == 'f' || c == 'u') {
+                return -1; // Wi-Fi passphrases are restricted to printable ASCII.
+            } else {
+                return -1;
+            }
+        }
+        if (n + 1 >= out_sz) return -1;
+        out[n++] = (char)c;
+    }
+    if (*p != '"') return -1;
+    out[n] = 0;
+    return 1;
+}
+
 // -------------------------------------------------------------------- routes
 
 // GET / — serve the gzipped UI bundle.
@@ -106,6 +147,17 @@ static esp_err_t h_wasm(httpd_req_t *req)
     httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
     return httpd_resp_send(req, (const char *)WASM_GZ_START, n);
+}
+
+
+// GET /i18n.js — gzip-compressed translation bundle.
+static esp_err_t h_i18n(httpd_req_t *req)
+{
+    const size_t n = I18N_GZ_END - I18N_GZ_START;
+    httpd_resp_set_type(req, "application/javascript; charset=utf-8");
+    httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    return httpd_resp_send(req, (const char *)I18N_GZ_START, n);
 }
 
 // GET /api/list  → {"active":"...", "photos":[{name,size,mtime},...]}
@@ -286,6 +338,54 @@ static esp_err_t h_calib_fill(httpd_req_t *req)
     return send_json(req, "{\"ok\":true}");
 }
 
+static bool calib_ink_code_ok(int ink)
+{
+    return ink == 0 || ink == 1 || ink == 2 || ink == 3 || ink == 5 || ink == 6;
+}
+
+// POST /api/calib-mix?mix=<ink>:<weight>,...
+// Example: mix=1:50,2:50 for a white/yellow 50% halftone patch.
+static esp_err_t h_calib_mix(httpd_req_t *req)
+{
+    char q[160] = {0};
+    size_t qlen = httpd_req_get_url_query_len(req);
+    if (qlen == 0 || qlen >= sizeof q) {
+        return send_text(req, "400 Bad Request", "text/plain", "missing mix");
+    }
+    httpd_req_get_url_query_str(req, q, sizeof q);
+    char mix[128] = {0};
+    if (httpd_query_key_value(q, "mix", mix, sizeof mix) != ESP_OK) {
+        return send_text(req, "400 Bad Request", "text/plain", "missing mix");
+    }
+
+    uint8_t inks[6] = {0};
+    uint8_t weights[6] = {0};
+    uint8_t n = 0;
+    char *save = NULL;
+    char *tok = strtok_r(mix, ",", &save);
+    while (tok && n < 6) {
+        char *colon = strchr(tok, ':');
+        if (!colon) return send_text(req, "400 Bad Request", "text/plain", "bad mix");
+        *colon = 0;
+        int ink = atoi(tok);
+        int wt = atoi(colon + 1);
+        if (!calib_ink_code_ok(ink) || wt <= 0 || wt > 100) {
+            return send_text(req, "400 Bad Request", "text/plain", "bad mix");
+        }
+        inks[n] = (uint8_t)ink;
+        weights[n] = (uint8_t)wt;
+        n++;
+        tok = strtok_r(NULL, ",", &save);
+    }
+    if (n == 0 || tok != NULL) {
+        return send_text(req, "400 Bad Request", "text/plain", "bad mix");
+    }
+    if (loop_display_request_mix(inks, weights, n) != 0) {
+        return send_text(req, "503 Service Unavailable", "text/plain", "busy");
+    }
+    return send_json(req, "{\"ok\":true}");
+}
+
 // GET /api/calib  → calibration JSON (palette + default adjust)
 // POST /api/calib body=<JSON>  → store it
 static esp_err_t h_calib(httpd_req_t *req)
@@ -325,18 +425,41 @@ static esp_err_t h_calib(httpd_req_t *req)
     return send_json(req, "{\"ok\":true}");
 }
 
-// GET /api/config  → {loop_interval_s}
-// POST /api/config { "loop_interval_s": N }
+static esp_err_t send_config_json_with_version(httpd_req_t *req)
+{
+    const esp_app_desc_t *app = esp_app_get_description();
+    const char *ap_password = config_get_wifi_ap_password();
+    char body[384];
+    snprintf(body, sizeof body,
+             "{\"loop_interval_s\":%u,"
+             "\"wifi_idle_sleep_s\":%u,"
+             "\"button_sleep_s\":%u,"
+             "\"status_led_brightness\":%u,"
+             "\"wifi_ap_ssid\":\"%s\","
+             "\"wifi_ap_password_set\":%s,"
+             "\"fw_version\":\"%s\","
+             "\"build_time\":\"%s %s\"}",
+             (unsigned)config_get_loop_interval_s(),
+             (unsigned)config_get_wifi_idle_sleep_s(),
+             (unsigned)config_get_button_sleep_s(),
+             (unsigned)config_get_status_led_brightness(),
+             config_get_wifi_ap_ssid(),
+             (ap_password && ap_password[0]) ? "true" : "false",
+             app ? app->version : "PaperColor Prints",
+             app ? app->date : "",
+             app ? app->time : "");
+    return send_json(req, body);
+}
+
+// GET /api/config  -> runtime/power-management settings + firmware version.
+// POST /api/config { "<integer_field>": N }
 static esp_err_t h_config(httpd_req_t *req)
 {
     if (req->method == HTTP_GET) {
-        char body[64];
-        snprintf(body, sizeof body, "{\"loop_interval_s\":%u}",
-                 (unsigned)config_get_loop_interval_s());
-        return send_json(req, body);
+        return send_config_json_with_version(req);
     }
-    // POST: read full body (<= 64 bytes), parse a single integer field.
-    char buf[128];
+    // POST: read full body (small JSON patch), parse known fields.
+    char buf[256];
     int n = (req->content_len < (int)sizeof buf - 1)
               ? req->content_len : (int)sizeof buf - 1;
     int got = 0;
@@ -349,19 +472,36 @@ static esp_err_t h_config(httpd_req_t *req)
         got += r;
     }
     buf[got] = 0;
-    // Cheap parse: find "loop_interval_s" : <num>
-    const char *p = strstr(buf, "loop_interval_s");
-    if (p) {
+    // Cheap partial-JSON parse: every setting is an integer field and callers
+    // may POST only the value they changed.
+    const struct {
+        const char *key;
+        int (*set)(uint32_t);
+    } fields[] = {
+        {"loop_interval_s", config_set_loop_interval_s},
+        {"wifi_idle_sleep_s", config_set_wifi_idle_sleep_s},
+        {"button_sleep_s", config_set_button_sleep_s},
+        {"status_led_brightness", config_set_status_led_brightness},
+    };
+    for (size_t i = 0; i < sizeof(fields) / sizeof(fields[0]); i++) {
+        const char *p = strstr(buf, fields[i].key);
+        if (!p) continue;
         p = strchr(p, ':');
-        if (p) {
-            uint32_t v = (uint32_t)strtoul(p + 1, NULL, 10);
-            config_set_loop_interval_s(v);
-        }
+        if (!p) continue;
+        uint32_t v = (uint32_t)strtoul(p + 1, NULL, 10);
+        fields[i].set(v);
     }
-    char body[64];
-    snprintf(body, sizeof body, "{\"loop_interval_s\":%u}",
-             (unsigned)config_get_loop_interval_s());
-    return send_json(req, body);
+    char wifi_pass[CONFIG_WIFI_AP_PASSWORD_MAX_LEN + 1];
+    int pass_rc = json_get_string_field(buf, "wifi_ap_password",
+                                        wifi_pass, sizeof wifi_pass);
+    if (pass_rc < 0) {
+        return send_text(req, "400 Bad Request", "text/plain", "bad password");
+    }
+    if (pass_rc > 0 && config_set_wifi_ap_password(wifi_pass) != 0) {
+        return send_text(req, "400 Bad Request", "text/plain",
+                         "password must be empty or 8-63 ASCII characters");
+    }
+    return send_config_json_with_version(req);
 }
 
 // Catch-all: for OS captive-portal probes (Apple /hotspot-detect.html, Android
@@ -373,8 +513,8 @@ static esp_err_t h_config(httpd_req_t *req)
 // httpd task.
 static const char CAPTIVE_STUB[] =
     "<!doctype html><meta http-equiv=\"refresh\" content=\"0;url=/\">"
-    "<title>PaperE6</title>"
-    "<a href=\"/\">PaperE6</a>";
+    "<title>PaperColor Prints</title>"
+    "<a href=\"/\">PaperColor Prints</a>";
 
 static esp_err_t h_catch_all(httpd_req_t *req)
 {
@@ -393,7 +533,7 @@ int http_server_start(void)
 {
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.uri_match_fn  = httpd_uri_match_wildcard;
-    cfg.max_uri_handlers = 16;
+    cfg.max_uri_handlers = 18;
     cfg.max_open_sockets = 7;
     // SD readdir + fatfs + sdspi chains burn a lot of stack; 8 KB overflows.
     cfg.stack_size       = 16384;
@@ -413,6 +553,7 @@ int http_server_start(void)
 
     REG("/",              HTTP_GET,    h_index);
     REG("/dither.wasm",   HTTP_GET,    h_wasm);
+    REG("/i18n.js",       HTTP_GET,    h_i18n);
     REG("/api/list",      HTTP_GET,    h_list);
     REG("/api/photo/*",   HTTP_GET,    h_photo_get);
     REG("/api/photo/*",   HTTP_DELETE, h_photo_del);
@@ -424,6 +565,7 @@ int http_server_start(void)
     REG("/api/calib",     HTTP_GET,    h_calib);
     REG("/api/calib",     HTTP_POST,   h_calib);
     REG("/api/calib-fill",HTTP_POST,   h_calib_fill);
+    REG("/api/calib-mix", HTTP_POST,   h_calib_mix);
     // Catch-all for captive-portal probes ("/hotspot-detect.html",
     // "/generate_204", "/ncsi.txt", arbitrary URLs typed by users…).
     REG("/*",             HTTP_GET,    h_catch_all);

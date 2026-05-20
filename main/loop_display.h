@@ -24,10 +24,20 @@ int loop_display_request_next(void);
 // against.  Returns 0 if queued.
 int loop_display_request_fill(uint8_t ink_code);
 
+// Async: paint a calibration halftone patch from up to six ink codes and
+// integer weights. Used for measuring mixed-ink optical behaviour. Weights are
+// relative and do not need to sum to 100.
+int loop_display_request_mix(const uint8_t *ink_codes,
+                             const uint8_t *weights,
+                             uint8_t n);
+
 // Block the calling thread until the worker is currently idle (the panel is
 // holding the last image and no command is in flight).  Useful before a
 // shutdown.
 void loop_display_wait_idle(void);
+
+// Non-blocking idle snapshot.
+bool loop_display_is_idle(void);
 
 #ifdef __cplusplus
 }

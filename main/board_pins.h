@@ -34,11 +34,14 @@
 #define BOARD_I2C_SCL    2
 #define BOARD_I2C_HZ     100000
 
-// On-board buttons (active-low through M5PM1 GPIO snapshot, plus dedicated
-// ESP32 GPIOs for fast handling).
-#define BOARD_BTN1_GPIO  1
-#define BOARD_BTN2_GPIO  9
-#define BOARD_BTN3_GPIO  10
+// On-board buttons (active-low).
+#define BOARD_BTN_TOP_GPIO   1
+#define BOARD_BTN_UP_GPIO    9
+#define BOARD_BTN_DOWN_GPIO  10
+
+// Two top NeoPixels are powered by PMIC RGB_EN and driven by ESP32 G21.
+#define BOARD_NEOPIXEL_GPIO  21
+#define BOARD_NEOPIXEL_COUNT 2
 
 #define EPD_SPI_CLOCK_HZ   (4 * 1000 * 1000)   // 4 MHz panel data rate
 #define SD_SPI_CLOCK_KHZ   (20000)             // 20 MHz initial; sdspi negotiates

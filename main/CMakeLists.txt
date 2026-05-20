@@ -2,6 +2,8 @@ set(WEB_SRC    "${CMAKE_CURRENT_SOURCE_DIR}/web/index.html")
 set(WEB_GZ     "${CMAKE_CURRENT_BINARY_DIR}/index.html.gz")
 set(WASM_SRC   "${CMAKE_CURRENT_SOURCE_DIR}/web/dither.wasm")
 set(WASM_GZ    "${CMAKE_CURRENT_BINARY_DIR}/dither.wasm.gz")
+set(I18N_SRC   "${CMAKE_CURRENT_SOURCE_DIR}/web/i18n.js")
+set(I18N_GZ    "${CMAKE_CURRENT_BINARY_DIR}/i18n.js.gz")
 
 idf_component_register(
     SRCS
@@ -22,12 +24,17 @@ idf_component_register(
         "http_server.c"
         "loop_display.c"
         "pm1.c"
+        "status_led.c"
+        "power_manager.c"
+        "battery_overlay.c"
     INCLUDE_DIRS "."
     REQUIRES
         driver
+        esp_app_format
         esp_driver_spi
         esp_driver_sdspi
         esp_driver_gpio
+        esp_driver_rmt
         sdmmc
         fatfs
         spiffs
@@ -40,7 +47,7 @@ idf_component_register(
         esp_http_server
         lwip
         nvs_flash
-    EMBED_FILES "${WEB_GZ}" "${WASM_GZ}"
+    EMBED_FILES "${WEB_GZ}" "${WASM_GZ}" "${I18N_GZ}"
 )
 
 # Build-time: gzip the web bundle so the firmware ships the compressed blob
@@ -63,5 +70,13 @@ add_custom_command(
     COMMENT "gzipping dither.wasm"
     VERBATIM
 )
-add_custom_target(web_gz DEPENDS "${WEB_GZ}" "${WASM_GZ}")
+add_custom_command(
+    OUTPUT  "${I18N_GZ}"
+    COMMAND ${CMAKE_COMMAND} -E remove -f "${I18N_GZ}"
+    COMMAND gzip -9 -c "${I18N_SRC}" > "${I18N_GZ}"
+    DEPENDS "${I18N_SRC}"
+    COMMENT "gzipping i18n.js"
+    VERBATIM
+)
+add_custom_target(web_gz DEPENDS "${WEB_GZ}" "${WASM_GZ}" "${I18N_GZ}")
 add_dependencies(${COMPONENT_LIB} web_gz)

@@ -20,7 +20,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
-#include "freertos/semphr.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
@@ -34,6 +33,9 @@
 #include "epd_4in0e.h"
 #include "palette.h"
 #include "board_pins.h"
+#include "pm1.h"
+#include "battery_overlay.h"
+#include "wifi_ap.h"
 
 static const char *TAG = "loop_display";
 
@@ -41,27 +43,200 @@ typedef enum {
     CMD_NEXT     = 1,
     CMD_SHOW_OPT = 2,
     CMD_FILL_INK = 3,
+    CMD_MIX_PATCH = 4,
 } cmd_kind_t;
 
 typedef struct {
     cmd_kind_t kind;
     char       name[PHOTO_NAME_MAX];
     uint8_t    ink_code;     // valid when kind == CMD_FILL_INK
+    uint8_t    mix_n;        // valid when kind == CMD_MIX_PATCH
+    uint8_t    mix_ink[6];
+    uint8_t    mix_weight[6];
 } display_cmd_t;
 
 static QueueHandle_t      s_q          = NULL;
-static SemaphoreHandle_t  s_idle_sem   = NULL;
 static int                s_auto_index = 0;
+static volatile bool      s_worker_idle = false;
 
 static const adjust_cfg_t k_default_adjust = {
     .brightness  = 0,
     .contrast    = 104,
-    .saturation  = 112,
+    .saturation  = 142,
     .gamma       = 98,
     .temperature = 108,
     .tint        = 98,
     .smoothness  = 12,
 };
+
+static int panel_power_on(void)
+{
+    epd_prepare_power_off();
+    if (pm1_set_epd_power(true) != 0) {
+        ESP_LOGE(TAG, "EPD rail enable failed");
+        return -1;
+    }
+    vTaskDelay(pdMS_TO_TICKS(120));
+    // The shared SPI bus is initialised by sd_storage_mount(true) before any
+    // display refresh.  Passing true avoids a harmless-but-noisy
+    // "SPI bus already initialized" error log on the first Show Now.
+    ESP_LOGI(TAG, "EPD rail on; running panel init");
+    if (epd_init(true) != 0) {
+        ESP_LOGE(TAG, "EPD init failed after rail enable");
+        epd_prepare_power_off();
+        pm1_set_epd_power(false);
+        return -1;
+    }
+    return 0;
+}
+
+static void panel_power_off(void)
+{
+    epd_sleep();
+    vTaskDelay(pdMS_TO_TICKS(10));
+    epd_prepare_power_off();
+    (void)pm1_set_epd_power(false);
+    ESP_LOGI(TAG, "EPD rail off");
+}
+
+static uint8_t read_battery_percent(void)
+{
+    static uint8_t last_percent = 100;
+    uint16_t mv = 0;
+    if (pm1_read_battery_mv(&mv) == 0 && mv > 0) {
+        last_percent = pm1_battery_percent_from_mv(mv);
+        ESP_LOGI(TAG, "battery %umV => %u%%", (unsigned)mv, (unsigned)last_percent);
+    }
+    return last_percent;
+}
+
+static int display_fb(uint8_t *fb, bool draw_battery)
+{
+    if (draw_battery) {
+        battery_overlay_draw(fb, read_battery_percent());
+    }
+    int64_t t0 = esp_timer_get_time();
+    if (panel_power_on() != 0) return -1;
+    epd_display(fb);
+    panel_power_off();
+    ESP_LOGI(TAG, "epd_disp %lldms", (esp_timer_get_time() - t0) / 1000);
+    return 0;
+}
+
+static inline void fb_pack(uint8_t *fb, int x, int y, uint8_t ink_code)
+{
+    size_t byte_idx = ((size_t)y * EPD_4IN0E_WIDTH + x) >> 1;
+    if ((x & 1) == 0) {
+        fb[byte_idx] = (fb[byte_idx] & 0x0F) | ((ink_code & 0x0F) << 4);
+    } else {
+        fb[byte_idx] = (fb[byte_idx] & 0xF0) | (ink_code & 0x0F);
+    }
+}
+
+static uint32_t calib_hash32(uint32_t x)
+{
+    x ^= x >> 16;
+    x *= 0x7feb352du;
+    x ^= x >> 15;
+    x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return x;
+}
+
+#define CALIB_TILE 16
+
+typedef struct {
+    uint32_t h;
+    uint8_t cell;
+} calib_rank_item_t;
+
+static int calib_rank_cmp(const void *a, const void *b)
+{
+    const calib_rank_item_t *ia = (const calib_rank_item_t *)a;
+    const calib_rank_item_t *ib = (const calib_rank_item_t *)b;
+    if (ia->h < ib->h) return -1;
+    if (ia->h > ib->h) return 1;
+    return (int)ia->cell - (int)ib->cell;
+}
+
+static uint8_t choose_mix_ink(uint16_t rank, uint16_t cells,
+                              const uint8_t *ink, const uint8_t *weight,
+                              uint8_t n, uint16_t total)
+{
+    uint16_t t = (uint32_t)rank * total / cells;
+    uint16_t acc = 0;
+    for (uint8_t i = 0; i < n; i++) {
+        acc += weight[i];
+        if (t < acc) return ink[i];
+    }
+    return ink[n - 1];
+}
+
+static int run_mix_patch(const uint8_t *ink, const uint8_t *weight, uint8_t n)
+{
+    if (!ink || !weight || n == 0 || n > 6) return -1;
+    uint16_t total = 0;
+    for (uint8_t i = 0; i < n; i++) total += weight[i];
+    if (total == 0) return -1;
+
+    size_t fb_bytes = (size_t)(EPD_4IN0E_WIDTH / 2) * EPD_4IN0E_HEIGHT;
+    uint8_t *fb = heap_caps_aligned_alloc(16, fb_bytes,
+                                          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!fb) {
+        fb = heap_caps_aligned_alloc(16, fb_bytes,
+                                     MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    }
+    if (!fb) return -1;
+    memset(fb, 0, fb_bytes);
+
+    for (int ty = 0; ty < EPD_4IN0E_HEIGHT; ty += CALIB_TILE) {
+        for (int tx = 0; tx < EPD_4IN0E_WIDTH; tx += CALIB_TILE) {
+            const int tw = (tx + CALIB_TILE <= EPD_4IN0E_WIDTH)
+                         ? CALIB_TILE : (EPD_4IN0E_WIDTH - tx);
+            const int th = (ty + CALIB_TILE <= EPD_4IN0E_HEIGHT)
+                         ? CALIB_TILE : (EPD_4IN0E_HEIGHT - ty);
+            const uint16_t cells = (uint16_t)(tw * th);
+            calib_rank_item_t order[CALIB_TILE * CALIB_TILE];
+            uint8_t rank_by_cell[CALIB_TILE * CALIB_TILE];
+
+            // Calibration patches are measured by a colorimeter, so low-
+            // frequency periodic screens are more harmful than fine grain.
+            // Build a unique hashed permutation per 16x16 tile: every tile has
+            // nearly exact ink ratios, but no Bayer rows/columns to read as
+            // bands in the aperture.
+            uint32_t salt = calib_hash32((uint32_t)(tx / CALIB_TILE) * 0x9e3779b9u
+                                       ^ (uint32_t)(ty / CALIB_TILE) * 0x85ebca6bu
+                                       ^ (uint32_t)n * 0xc2b2ae35u
+                                       ^ (uint32_t)total);
+            for (uint16_t cy = 0, cell = 0; cy < th; cy++) {
+                for (uint16_t cx = 0; cx < tw; cx++, cell++) {
+                    uint32_t key = salt
+                                 ^ ((uint32_t)(tx + cx) * 0x27d4eb2du)
+                                 ^ ((uint32_t)(ty + cy) * 0x165667b1u)
+                                 ^ ((uint32_t)cell * 0xd3a2646cu);
+                    order[cell].h = calib_hash32(key);
+                    order[cell].cell = (uint8_t)cell;
+                }
+            }
+            qsort(order, cells, sizeof(order[0]), calib_rank_cmp);
+            for (uint16_t r = 0; r < cells; r++) {
+                rank_by_cell[order[r].cell] = (uint8_t)r;
+            }
+
+            for (uint16_t cy = 0, cell = 0; cy < th; cy++) {
+                for (uint16_t cx = 0; cx < tw; cx++, cell++) {
+                    uint8_t chosen = choose_mix_ink(rank_by_cell[cell], cells,
+                                                    ink, weight, n, total);
+                    fb_pack(fb, tx + cx, ty + cy, chosen);
+                }
+            }
+        }
+    }
+
+    int rc = display_fb(fb, false);
+    heap_caps_free(fb);
+    return rc;
+}
 
 // Fast path — read a pre-dithered 4bpp framebuffer straight from disk and
 // push it to the panel.  Used when the browser-side WASM pipeline has already
@@ -91,11 +266,9 @@ static int run_bin_pipeline(const char *bin_path)
         return -1;
     }
     ESP_LOGI(TAG, "bin read %lldms", (esp_timer_get_time() - t0) / 1000);
-    t0 = esp_timer_get_time();
-    epd_display(fb);
-    ESP_LOGI(TAG, "epd_disp %lldms", (esp_timer_get_time() - t0) / 1000);
+    int rc = display_fb(fb, true);
     heap_caps_free(fb);
-    return 0;
+    return rc;
 }
 
 static int run_pipeline(const char *path)
@@ -133,8 +306,8 @@ static int run_pipeline(const char *path)
         return -1;
     }
     t0 = esp_timer_get_time();
-    int dr = dither_ved_fs(resized, TARGET_W, TARGET_H, fb, NULL,
-                            k_default_adjust.smoothness);
+    int dr = dither_e6_mix_fs(resized, TARGET_W, TARGET_H, fb, NULL,
+                              k_default_adjust.smoothness);
     heap_caps_free(resized);
     if (dr != 0) {
         heap_caps_free(fb);
@@ -142,11 +315,9 @@ static int run_pipeline(const char *path)
     }
     ESP_LOGI(TAG, "dither  %lldms", (esp_timer_get_time()-t0)/1000);
 
-    t0 = esp_timer_get_time();
-    epd_display(fb);
-    ESP_LOGI(TAG, "epd_disp %lldms", (esp_timer_get_time()-t0)/1000);
+    int disp_rc = display_fb(fb, true);
     heap_caps_free(fb);
-    return 0;
+    return disp_rc;
 }
 
 static int resolve_next(char *out_name, size_t out_sz)
@@ -173,21 +344,35 @@ static void worker(void *arg)
     for (;;) {
         display_cmd_t cmd = {0};
         uint32_t int_s = config_get_loop_interval_s();
-        // Take the semaphore while we wait for work — `wait_idle` reads it.
-        xSemaphoreGive(s_idle_sem);
+        s_worker_idle = true;
         BaseType_t got = xQueueReceive(s_q, &cmd, pdMS_TO_TICKS((uint32_t)int_s * 1000U));
-        xSemaphoreTake(s_idle_sem, 0);
+        s_worker_idle = false;
 
         if (got != pdTRUE) {
+            // With nobody connected, periodic refreshes are driven by deep
+            // sleep timer wakeups instead of burning power while awake.
+            if (wifi_ap_station_count() <= 0) {
+                continue;
+            }
             cmd.kind = CMD_NEXT;
             cmd.name[0] = 0;
         }
 
         if (cmd.kind == CMD_FILL_INK) {
             ESP_LOGI(TAG, "fill ink 0x%x", cmd.ink_code);
-            epd_clear(cmd.ink_code);
+            if (panel_power_on() == 0) {
+                epd_clear(cmd.ink_code);
+                panel_power_off();
+            }
             // Calibration fills are not "active photos"; clear the marker
             // so the gallery UI doesn't keep one highlighted.
+            photo_store_set_active(NULL);
+            continue;
+        }
+
+        if (cmd.kind == CMD_MIX_PATCH) {
+            ESP_LOGI(TAG, "calib mix patch n=%u", (unsigned)cmd.mix_n);
+            (void)run_mix_patch(cmd.mix_ink, cmd.mix_weight, cmd.mix_n);
             photo_store_set_active(NULL);
             continue;
         }
@@ -233,8 +418,7 @@ int loop_display_start(void)
 {
     if (s_q) return 0;
     s_q = xQueueCreate(4, sizeof(display_cmd_t));
-    s_idle_sem = xSemaphoreCreateBinary();
-    if (!s_q || !s_idle_sem) return -1;
+    if (!s_q) return -1;
     // 8 KB overflows on the JPEG-decode fallback path (jpeg + resize +
     // adjust + dither stack frames stack up). 24 KB gives comfortable
     // headroom; the .bin fast path uses far less but the stack is shared.
@@ -248,6 +432,9 @@ int loop_display_request_show(const char *name)
     if (!s_q || !name) return -1;
     display_cmd_t c = { .kind = CMD_SHOW_OPT };
     strncpy(c.name, name, sizeof c.name - 1);
+    // Explicit "Show Now" should override stale queued Next/Show commands.
+    // The current refresh is not interrupted; this only clears pending work.
+    xQueueReset(s_q);
     return xQueueSend(s_q, &c, 0) == pdTRUE ? 0 : -1;
 }
 
@@ -265,9 +452,27 @@ int loop_display_request_fill(uint8_t ink_code)
     return xQueueSend(s_q, &c, 0) == pdTRUE ? 0 : -1;
 }
 
+int loop_display_request_mix(const uint8_t *ink_codes,
+                             const uint8_t *weights,
+                             uint8_t n)
+{
+    if (!s_q || !ink_codes || !weights || n == 0 || n > 6) return -1;
+    display_cmd_t c = { .kind = CMD_MIX_PATCH, .mix_n = n };
+    memcpy(c.mix_ink, ink_codes, n);
+    memcpy(c.mix_weight, weights, n);
+    return xQueueSend(s_q, &c, 0) == pdTRUE ? 0 : -1;
+}
+
 void loop_display_wait_idle(void)
 {
-    if (!s_idle_sem) return;
-    xSemaphoreTake(s_idle_sem, portMAX_DELAY);
-    xSemaphoreGive(s_idle_sem);
+    while (!loop_display_is_idle()) {
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+}
+
+bool loop_display_is_idle(void)
+{
+    if (!s_q) return true;
+    if (uxQueueMessagesWaiting(s_q) > 0) return false;
+    return s_worker_idle;
 }

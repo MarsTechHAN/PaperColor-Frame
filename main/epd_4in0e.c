@@ -128,7 +128,7 @@ int epd_init(bool bus_already_inited)
     };
     gpio_config(&in_cfg);
 
-    if (!bus_already_inited) {
+    if (!bus_already_inited && !s_spi) {
         spi_bus_config_t bus = {
             .mosi_io_num = EPD_PIN_MOSI,
             .miso_io_num = EPD_PIN_MISO,
@@ -138,20 +138,24 @@ int epd_init(bool bus_already_inited)
             // Big enough for a row of the framebuffer in one shot.
             .max_transfer_sz = 4096,
         };
-        ESP_RETURN_ON_ERROR(spi_bus_initialize(EPD_SPI_HOST, &bus, SPI_DMA_CH_AUTO),
-                            TAG, "spi_bus_initialize");
+        esp_err_t bus_err = spi_bus_initialize(EPD_SPI_HOST, &bus, SPI_DMA_CH_AUTO);
+        if (bus_err != ESP_ERR_INVALID_STATE) {
+            ESP_RETURN_ON_ERROR(bus_err, TAG, "spi_bus_initialize");
+        }
     }
 
-    spi_device_interface_config_t dev = {
-        .clock_speed_hz = EPD_SPI_CLOCK_HZ,
-        .mode = 0,
-        .spics_io_num = EPD_PIN_CS,
-        .queue_size = 1,
-        .pre_cb = pre_transfer_cb,
-        .flags = SPI_DEVICE_HALFDUPLEX,
-    };
-    ESP_RETURN_ON_ERROR(spi_bus_add_device(EPD_SPI_HOST, &dev, &s_spi),
-                        TAG, "spi_bus_add_device");
+    if (!s_spi) {
+        spi_device_interface_config_t dev = {
+            .clock_speed_hz = EPD_SPI_CLOCK_HZ,
+            .mode = 0,
+            .spics_io_num = EPD_PIN_CS,
+            .queue_size = 1,
+            .pre_cb = pre_transfer_cb,
+            .flags = SPI_DEVICE_HALFDUPLEX,
+        };
+        ESP_RETURN_ON_ERROR(spi_bus_add_device(EPD_SPI_HOST, &dev, &s_spi),
+                            TAG, "spi_bus_add_device");
+    }
 
     epd_reset();
     epd_wait_busy_high();
@@ -215,6 +219,17 @@ void epd_sleep(void)
 {
     epd_send_cmd(0x07);
     epd_send_data1(0xA5);
+}
+
+void epd_prepare_power_off(void)
+{
+    gpio_config_t out_cfg = {
+        .pin_bit_mask = (1ULL << EPD_PIN_DC) | (1ULL << EPD_PIN_RST),
+        .mode = GPIO_MODE_OUTPUT,
+    };
+    gpio_config(&out_cfg);
+    gpio_set_level(EPD_PIN_DC, 0);
+    gpio_set_level(EPD_PIN_RST, 0);
 }
 
 struct spi_device_t *epd_spi_handle(void)

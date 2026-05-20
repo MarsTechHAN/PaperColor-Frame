@@ -30,6 +30,9 @@ void epd_clear(uint8_t ink_code);
 // controller.
 void epd_sleep(void);
 
+// Hold EPD-only control pins in a safe state before/after PMIC rail gating.
+void epd_prepare_power_off(void);
+
 // Returns the SPI device handle so the SD-card init can register on the same
 // bus without re-initialising it.
 struct spi_device_t;

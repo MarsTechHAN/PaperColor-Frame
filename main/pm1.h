@@ -34,8 +34,9 @@ enum {
     PM1_PYG4 = 4,   // PY_SD_DET_EN — unused SD detect pull-up enable
 };
 
-// Bring up the I2C bus, probe the PMIC, then enable EPD + SD rails:
-//   * PYG0 = output high (EPD power)
+// Bring up the I2C bus, probe the PMIC, then enable only the always-needed
+// storage rail:
+//   * PYG0 = output low  (EPD power is enabled only during refresh)
 //   * PYG3 = output high (SD power)
 // Returns 0 on success.  Leaves the I2C bus installed on BOARD_I2C_PORT.
 int pm1_init(void);
@@ -45,6 +46,23 @@ int pm1_set_epd_power(bool on);
 
 // Toggle SD rail.
 int pm1_set_sd_power(bool on);
+
+// Toggle the PMIC RGB_EN output that powers the top NeoPixels.
+int pm1_set_rgb_power(bool on);
+
+// Optional external boost rail.  Do not disable the 3.3 V buck/LDO rail in
+// deep sleep because it can be the ESP32's own supply.
+int pm1_set_dcdc_power(bool on);
+int pm1_set_boost_power(bool on);
+
+// Battery voltage from the PMIC ADC, in millivolts.
+int pm1_read_battery_mv(uint16_t *mv);
+
+// Approximate single-cell Li-ion state-of-charge from VBAT in millivolts.
+uint8_t pm1_battery_percent_from_mv(uint16_t mv);
+
+// Best-effort shutdown of external loads before ESP deep sleep.
+void pm1_prepare_deep_sleep(void);
 
 #ifdef __cplusplus
 }

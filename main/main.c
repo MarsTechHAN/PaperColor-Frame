@@ -1,16 +1,16 @@
-// main.c — PaperE6 photo viewer with on-device web UI.
+// main.c — PaperColor photo frame with on-device web UI.
 //
 // Boot order:
 //   1. color_pipeline_init / palette_init.
 //   2. Mount SD on shared SPI bus.
-//   3. Bring up EPD as a second device on the same bus.
-//   4. Init NVS (config_store) and create /sdcard/photos.
-//   5. Start the EPD worker task (loop_display).
-//   6. SoftAP up, DNS hijack on :53, HTTP server on :80.
+//   3. Init NVS (config_store) and create /sdcard/photos.
+//   4. Start the EPD worker task (loop_display).
+//   5. SoftAP up, DNS hijack on :53, HTTP server on :80.
+//   6. Start power manager for buttons, LEDs, and deep sleep.
 //   7. main() exits and lets FreeRTOS run the worker + httpd forever.
 //
 // The display worker auto-advances every config_get_loop_interval_s() while
-// the AP stays online for users to drop new photos in.
+// awake. In low-power mode the ESP also uses that interval as its timer wake.
 
 #include <stdio.h>
 #include <string.h>
@@ -19,6 +19,7 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
+#include "esp_sleep.h"
 
 #include "board_pins.h"
 #include "palette.h"
@@ -32,6 +33,7 @@
 #include "dns_hijack.h"
 #include "http_server.h"
 #include "pm1.h"
+#include "power_manager.h"
 
 static const char *TAG = "main";
 
@@ -45,7 +47,7 @@ static void log_heap(const char *tag)
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "PaperE6 photo viewer — boot");
+    ESP_LOGI(TAG, "PaperColor photo frame — boot");
     log_heap("boot");
 
     // Colour-pipeline LUT must exist before palette_init() consumes it.
@@ -55,8 +57,11 @@ void app_main(void)
     // NVS holds the loop-interval setting.
     config_store_init();
 
-    // Enable EPD + SD rails through the M5PM1 PMIC.  Without this the SD
-    // card stays unpowered and sdmmc_init_sd_if_cond returns 0x108.
+    esp_sleep_wakeup_cause_t wake = esp_sleep_get_wakeup_cause();
+    ESP_LOGI(TAG, "wake cause=%d", (int)wake);
+
+    // Enable the SD rail through the M5PM1 PMIC.  The EPD rail intentionally
+    // stays off here and is powered only inside the display refresh path.
     if (pm1_init() != 0) {
         ESP_LOGE(TAG, "M5PM1 init failed — abort");
         return;
@@ -74,15 +79,11 @@ void app_main(void)
     } else {
         photo_store_set_mount_point("/sdcard");
     }
+    if (strcmp(photo_store_dir(), "/spiffs") == 0) {
+        pm1_set_sd_power(false);
+    }
     if (photo_store_init() != 0) {
         ESP_LOGE(TAG, "photo store init failed — abort");
-        sd_storage_unmount();
-        return;
-    }
-
-    // EPD attaches as a second device on the same bus.
-    if (epd_init(true) != 0) {
-        ESP_LOGE(TAG, "EPD init failed — abort");
         sd_storage_unmount();
         return;
     }
@@ -98,8 +99,20 @@ void app_main(void)
     dns_hijack_start(wifi_ap_get_ip());
     http_server_start();
 
+    if (power_manager_start() != 0) {
+        ESP_LOGE(TAG, "power_manager_start failed");
+        return;
+    }
+
+    if (wake == ESP_SLEEP_WAKEUP_TIMER) {
+        ESP_LOGI(TAG, "timer wake: queueing scheduled refresh");
+        (void)loop_display_request_next();
+    }
+
     log_heap("after-init");
-    ESP_LOGI(TAG, "ready — connect to SSID '" WIFI_AP_SSID "' (open)");
+    ESP_LOGI(TAG, "ready — connect to SSID '%s' (%s)",
+             config_get_wifi_ap_ssid(),
+             config_get_wifi_ap_password()[0] ? "password set" : "open");
 
     // The worker handles its own timing; main() can exit.
 }
