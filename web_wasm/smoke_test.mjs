@@ -27,6 +27,9 @@ exports = mod.instance.exports;
 const e = exports;
 if (e._initialize) e._initialize();
 e.wasm_init();
+if (!e.wasm_dither_e6 || !e.wasm_dither_e6_15x) {
+  throw new Error('missing E6 dither exports');
+}
 
 const rgbLen = W * H * 3;
 const rgbPtr = e.malloc(rgbLen);
@@ -44,6 +47,10 @@ const rc = e.wasm_dither(rgbPtr, W, H, cfgPtr, packedPtr, 0);
 const t1 = performance.now();
 if (rc !== 0) throw new Error('dither rc=' + rc);
 console.log(`dither rc=0, ${(t1-t0).toFixed(0)} ms`);
+
+for (let i = 0; i < rgbLen; i += 3) { heap[i] = 206; heap[i+1] = 38; heap[i+2] = 54; }
+const rcE6 = e.wasm_dither_e6(rgbPtr, W, H, cfgPtr, packedPtr, 0);
+if (rcE6 !== 0) throw new Error('e6 dither rc=' + rcE6);
 
 const packed = new Uint8Array(e.memory.buffer, packedPtr, packedLen);
 const counts = {};

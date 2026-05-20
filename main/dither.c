@@ -246,6 +246,114 @@ static inline int pick_palette_spatial(float L, float a, float b, uint8_t reg,
     return best_idx;
 }
 
+// ------------------------------------------------------ E6 physical picker
+//
+// Classic mode above is a colour-distance dither with modest spatial cleanup.
+// The E6 mode adds a display-physics bias: Spectra 6 dots are not equal on
+// paper.  A single black/red/blue particle is much more visible in a highlight
+// than a yellow or white decision, and warm/skin/sky regions are easily ruined
+// by one wrong complementary ink.  These terms only affect close calls; strong
+// colour evidence still wins through the CIEDE2000 term.
+
+static inline float e6_palette_bias(uint8_t reg, float L,
+                                    uint8_t r, uint8_t g, uint8_t b, int p)
+{
+    float bias = region_palette_bias(reg, L, p) * 0.72f;
+    int maxc = r > g ? (r > b ? r : b) : (g > b ? g : b);
+    int minc = r < g ? (r < b ? r : b) : (g < b ? g : b);
+    int chroma = maxc - minc;
+    int y = (77 * r + 150 * g + 29 * b + 128) >> 8;
+
+    if (chroma < 22 && y > 112) {
+        float k = (float)(y - 112) / 88.0f;
+        if (k > 1.0f) k = 1.0f;
+        if (p == PIDX_BLACK)  bias += 1.20f * k;
+        if (p == PIDX_RED)    bias += 0.74f * k;
+        if (p == PIDX_BLUE)   bias += 0.62f * k;
+        if (p == PIDX_GREEN)  bias += 0.26f * k;
+        if (p == PIDX_YELLOW) bias -= 0.14f * k;
+        if (p == PIDX_WHITE)  bias -= 0.10f * k;
+    }
+
+    if ((reg & REG_WARM_SKIN) || (r > g + 14 && r > b + 10 && chroma > 18)) {
+        if (p == PIDX_BLUE)  bias += 1.25f;
+        if (p == PIDX_GREEN) bias += 0.92f;
+        if (p == PIDX_RED)   bias -= 0.24f;
+        if (p == PIDX_YELLOW)bias -= 0.14f;
+    }
+    if ((reg & REG_SKY_COOL) || (b > r + 14 && b >= g + 4 && chroma > 18)) {
+        if (p == PIDX_RED)    bias += 1.22f;
+        if (p == PIDX_YELLOW) bias += 0.78f;
+        if (p == PIDX_GREEN)  bias += 0.38f;
+        if (p == PIDX_BLUE)   bias -= 0.28f;
+        if (p == PIDX_WHITE)  bias -= 0.10f;
+    }
+    if (g > r + 12 && g >= b - 3 && chroma > 18) {
+        if (p == PIDX_RED)    bias += 1.08f;
+        if (p == PIDX_BLUE)   bias += 0.38f;
+        if (p == PIDX_GREEN)  bias -= 0.32f;
+        if (p == PIDX_YELLOW) bias += 0.10f;
+    }
+
+    return bias;
+}
+
+static inline float e6_screen_tiebreak(int x, int y, int p)
+{
+    static const uint8_t bayer8[64] = {
+        0,48,12,60, 3,51,15,63,
+       32,16,44,28,35,19,47,31,
+        8,56, 4,52,11,59, 7,55,
+       40,24,36,20,43,27,39,23,
+        2,50,14,62, 1,49,13,61,
+       34,18,46,30,33,17,45,29,
+       10,58, 6,54, 9,57, 5,53,
+       42,26,38,22,41,25,37,21
+    };
+    int v = bayer8[((y & 7) << 3) | (x & 7)];
+    // Rotate the matrix per ink so ties do not make all inks share one grid.
+    v = (v + p * 11) & 63;
+    return ((float)v / 63.0f - 0.5f) * 0.10f;
+}
+
+static inline int pick_palette_e6_mix(float L, float a, float b, uint8_t reg,
+                                      uint8_t r, uint8_t g, uint8_t bb,
+                                      int x, int y,
+                                      int left, int up, int up_left, int up_right)
+{
+    float raw[PALETTE_N];
+    int raw_best = 0;
+    float raw_best_d = FLT_MAX;
+    for (int p = 0; p < PALETTE_N; p++) {
+        float d = ciede2000(L, a, b,
+                            PALETTE_LAB[p][0],
+                            PALETTE_LAB[p][1],
+                            PALETTE_LAB[p][2]);
+        raw[p] = d;
+        if (d < raw_best_d) { raw_best_d = d; raw_best = p; }
+    }
+    if (raw_best_d < 1.45f) return raw_best;
+
+    int best_idx = raw_best;
+    float best_d = FLT_MAX;
+    for (int p = 0; p < PALETTE_N; p++) {
+        float same = 0.0f;
+        if (p == left)     same += 0.70f;
+        if (p == up)       same += 0.70f;
+        if (p == up_left)  same += 0.28f;
+        if (p == up_right) same += 0.28f;
+
+        float cluster_scale = (reg & REG_FLAT) ? 1.55f : ((reg & REG_EDGE) ? 0.42f : 1.05f);
+        float d = raw[p]
+                + same * cluster_scale
+                + e6_palette_bias(reg, L, r, g, bb, p)
+                + e6_screen_tiebreak(x, y, p);
+        if (p == raw_best) d -= 0.08f;
+        if (d < best_d) { best_d = d; best_idx = p; }
+    }
+    return best_idx;
+}
+
 // --------------------------------------------------------- smoothness helper
 //
 // smoothness (0..100) maps to a ΔE2000 threshold via `smoothness * 0.4`:
@@ -660,10 +768,11 @@ int flat_fill_constructivist(const uint8_t *in_rgb888, int w, int h,
 }
 
 // ----------------------------------------------------------- 1×1 entry point
-int dither_ved_fs(const uint8_t *in_rgb888, int w, int h,
-                  uint8_t *out_packed,
-                  uint8_t *out_idx_opt,
-                  int smoothness)
+static int dither_fs_core(const uint8_t *in_rgb888, int w, int h,
+                          uint8_t *out_packed,
+                          uint8_t *out_idx_opt,
+                          int smoothness,
+                          bool e6_mix_mode)
 {
     const size_t row_bytes = (size_t)w * 3 * sizeof(float);
     float *err_cur = (float *)heap_caps_calloc(1, row_bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
@@ -725,7 +834,11 @@ int dither_ved_fs(const uint8_t *in_rgb888, int w, int h,
             int up_idx = (y > 0) ? idx_prev[x] : -1;
             int up_left_idx = (y > 0 && x - xstep >= 0 && x - xstep < w) ? idx_prev[x - xstep] : -1;
             int up_right_idx = (y > 0 && x + xstep >= 0 && x + xstep < w) ? idx_prev[x + xstep] : -1;
-            int best_idx = pick_palette_spatial(L, a, b, reg, left_idx, up_idx, up_left_idx, up_right_idx);
+            int best_idx = e6_mix_mode
+                ? pick_palette_e6_mix(L, a, b, reg, src[0], src[1], src[2],
+                                      x, y, left_idx, up_idx, up_left_idx, up_right_idx)
+                : pick_palette_spatial(L, a, b, reg,
+                                       left_idx, up_idx, up_left_idx, up_right_idx);
 
             idx_cur[x] = (uint8_t)best_idx;
             idx_all[(size_t)y * w + x] = (uint8_t)best_idx;
@@ -755,7 +868,8 @@ int dither_ved_fs(const uint8_t *in_rgb888, int w, int h,
         serp = !serp;
 
         if ((y & 0x1F) == 0) {
-            ESP_LOGI(TAG, "dither row %d/%d", y, h);
+            ESP_LOGI(TAG, "%s dither row %d/%d",
+                     e6_mix_mode ? "e6" : "classic", y, h);
         }
     }
 
@@ -772,6 +886,24 @@ int dither_ved_fs(const uint8_t *in_rgb888, int w, int h,
     free(region);
     free(target_lab);
     return 0;
+}
+
+int dither_ved_fs(const uint8_t *in_rgb888, int w, int h,
+                  uint8_t *out_packed,
+                  uint8_t *out_idx_opt,
+                  int smoothness)
+{
+    return dither_fs_core(in_rgb888, w, h, out_packed, out_idx_opt,
+                          smoothness, false);
+}
+
+int dither_e6_mix_fs(const uint8_t *in_rgb888, int w, int h,
+                     uint8_t *out_packed,
+                     uint8_t *out_idx_opt,
+                     int smoothness)
+{
+    return dither_fs_core(in_rgb888, w, h, out_packed, out_idx_opt,
+                          smoothness, true);
 }
 
 // ----------------------------------------------------- 1.5× supersample path
@@ -927,15 +1059,16 @@ static void unsharp_mask_inplace(uint8_t *rgb, int w, int h, float amount)
     free(blur);
 }
 
-int dither_ved_fs_15x(const uint8_t *src_rgb, int src_w, int src_h,
-                      int panel_w, int panel_h,
-                      uint8_t *out_packed,
-                      uint8_t *out_idx_opt,
-                      int smoothness)
+static int dither_15x_core(const uint8_t *src_rgb, int src_w, int src_h,
+                           int panel_w, int panel_h,
+                           uint8_t *out_packed,
+                           uint8_t *out_idx_opt,
+                           int smoothness,
+                           bool e6_mix_mode)
 {
     if (src_w != panel_w * 3 / 2 || src_h != panel_h * 3 / 2) {
-        ESP_LOGE(TAG, "15x: src must be 1.5× panel (%dx%d vs %dx%d panel)",
-                 src_w, src_h, panel_w, panel_h);
+        ESP_LOGE(TAG, "%s 15x: src must be 1.5× panel (%dx%d vs %dx%d panel)",
+                 e6_mix_mode ? "e6" : "classic", src_w, src_h, panel_w, panel_h);
         return -1;
     }
 
@@ -957,9 +1090,31 @@ int dither_ved_fs_15x(const uint8_t *src_rgb, int src_w, int src_h,
     catmull_rom_downsample(src_rgb, src_w, src_h, target, panel_w, panel_h);
     unsharp_mask_inplace(target, panel_w, panel_h, 0.48f);
 
-    int rc = dither_ved_fs(target, panel_w, panel_h, out_packed, out_idx_opt, smoothness);
+    int rc = e6_mix_mode
+           ? dither_e6_mix_fs(target, panel_w, panel_h, out_packed, out_idx_opt, smoothness)
+           : dither_ved_fs(target, panel_w, panel_h, out_packed, out_idx_opt, smoothness);
     free(target);
     return rc;
+}
+
+int dither_ved_fs_15x(const uint8_t *src_rgb, int src_w, int src_h,
+                      int panel_w, int panel_h,
+                      uint8_t *out_packed,
+                      uint8_t *out_idx_opt,
+                      int smoothness)
+{
+    return dither_15x_core(src_rgb, src_w, src_h, panel_w, panel_h,
+                           out_packed, out_idx_opt, smoothness, false);
+}
+
+int dither_e6_mix_fs_15x(const uint8_t *src_rgb, int src_w, int src_h,
+                         int panel_w, int panel_h,
+                         uint8_t *out_packed,
+                         uint8_t *out_idx_opt,
+                         int smoothness)
+{
+    return dither_15x_core(src_rgb, src_w, src_h, panel_w, panel_h,
+                           out_packed, out_idx_opt, smoothness, true);
 }
 
 int flat_fill_constructivist_15x(const uint8_t *src_rgb, int src_w, int src_h,

@@ -35,6 +35,14 @@ int dither_ved_fs(const uint8_t *in_rgb888, int w, int h,
                   uint8_t *out_idx_opt,
                   int smoothness);
 
+// E6 physical-display mode.  Keeps the classic VED/FS pass intact, then uses
+// panel-specific ink visibility and optical neighbourhood mixing heuristics to
+// choose less noisy ink mixtures on the real SpectRA 6 paper.
+int dither_e6_mix_fs(const uint8_t *in_rgb888, int w, int h,
+                     uint8_t *out_packed,
+                     uint8_t *out_idx_opt,
+                     int smoothness);
+
 // Supersampled variant: source is exactly 1.5× the panel size in each axis
 // (e.g. 600×900 in, 400×600 out).  Each panel pixel decision averages a
 // 1.5×1.5 block of source pixels (4 cells with weights summing to 2.25) in
@@ -51,6 +59,13 @@ int dither_ved_fs_15x(const uint8_t *src_rgb, int src_w, int src_h,
                       uint8_t *out_packed,
                       uint8_t *out_idx_opt,
                       int smoothness);
+
+// 1.5× supersampled variant of the E6 physical-display dither.
+int dither_e6_mix_fs_15x(const uint8_t *src_rgb, int src_w, int src_h,
+                         int panel_w, int panel_h,
+                         uint8_t *out_packed,
+                         uint8_t *out_idx_opt,
+                         int smoothness);
 
 // Pure flat-colour quantiser for the "Russian" preset.  This path deliberately
 // disables error diffusion: every panel pixel is one physical ink, then a small

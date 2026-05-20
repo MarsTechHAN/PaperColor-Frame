@@ -81,6 +81,20 @@ EXPORT int wasm_dither(uint8_t *rgb, int w, int h,
     return dither_ved_fs(rgb, w, h, packed, indices_opt, smoothness);
 }
 
+// E6 physical-display dither.  Same adjust/enhance front-end as classic, but
+// the quantiser uses Spectra 6 ink-visibility and local-mix heuristics.
+EXPORT int wasm_dither_e6(uint8_t *rgb, int w, int h,
+                          const adjust_cfg_t *cfg,
+                          uint8_t *packed,
+                          uint8_t *indices_opt)
+{
+    if (!rgb || !packed || w <= 0 || h <= 0) return -1;
+    int smoothness = cfg ? cfg->smoothness : 30;
+    if (cfg) apply_adjust_rgb888(rgb, w, h, cfg);
+    enhance_eink_rgb888(rgb, w, h);
+    return dither_e6_mix_fs(rgb, w, h, packed, indices_opt, smoothness);
+}
+
 // Flat-fill poster pipeline used by the "Russian" preset.  Same adjustment and
 // enhancement stages as the normal preview, but final quantisation is pure ink
 // assignment with no error diffusion.
@@ -113,6 +127,21 @@ EXPORT int wasm_dither_15x(uint8_t *rgb_15x, int panel_w, int panel_h,
     enhance_eink_rgb888(rgb_15x, src_w, src_h);
     return dither_ved_fs_15x(rgb_15x, src_w, src_h, panel_w, panel_h,
                              packed, indices_opt, smoothness);
+}
+
+EXPORT int wasm_dither_e6_15x(uint8_t *rgb_15x, int panel_w, int panel_h,
+                              const adjust_cfg_t *cfg,
+                              uint8_t *packed,
+                              uint8_t *indices_opt)
+{
+    if (!rgb_15x || !packed || panel_w <= 0 || panel_h <= 0) return -1;
+    int src_w = panel_w * 3 / 2;
+    int src_h = panel_h * 3 / 2;
+    int smoothness = cfg ? cfg->smoothness : 30;
+    if (cfg) apply_adjust_rgb888(rgb_15x, src_w, src_h, cfg);
+    enhance_eink_rgb888(rgb_15x, src_w, src_h);
+    return dither_e6_mix_fs_15x(rgb_15x, src_w, src_h, panel_w, panel_h,
+                                packed, indices_opt, smoothness);
 }
 
 EXPORT int wasm_flat_fill_15x(uint8_t *rgb_15x, int panel_w, int panel_h,

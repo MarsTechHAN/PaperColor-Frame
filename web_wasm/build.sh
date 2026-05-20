@@ -22,8 +22,8 @@ MAIN=../main
 SHIM=include_shim
 OUT=../main/web/dither.wasm
 
-# Standalone WASM (no JS runtime): we explicitly export wasm_init,
-# wasm_set_palette_lab, wasm_dither, malloc, free.  -sSTANDALONE_WASM produces
+# Standalone WASM (no JS runtime): we explicitly export the dither entry
+# points, palette bridge, malloc, and free.  -sSTANDALONE_WASM produces
 # a single .wasm with no glue JS; the browser instantiates it directly.
 
 $EMCC \
@@ -35,7 +35,7 @@ $EMCC \
     -I"$MAIN" \
     -I"$SHIM" \
     -sSTANDALONE_WASM=1 \
-    -sEXPORTED_FUNCTIONS=_wasm_init,_wasm_set_palette_lab,_wasm_dither,_wasm_dither_15x,_wasm_flat_fill,_wasm_flat_fill_15x,_wasm_rgb_to_lab,_malloc,_free \
+    -sEXPORTED_FUNCTIONS=_wasm_init,_wasm_set_palette_lab,_wasm_dither,_wasm_dither_15x,_wasm_dither_e6,_wasm_dither_e6_15x,_wasm_flat_fill,_wasm_flat_fill_15x,_wasm_rgb_to_lab,_malloc,_free \
     -sALLOW_MEMORY_GROWTH=1 \
     -sINITIAL_MEMORY=4194304 \
     -sMAXIMUM_MEMORY=33554432 \
