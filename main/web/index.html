@@ -4,628 +4,1377 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>PaperE6 Photos</title>
+<title>PaperColor Prints</title>
 <style>
 :root {
-  --paper: #FAFAF7;
-  --ink: #000;
-  --ink-2: #222;
-  --ink-3: #555;
-  --ink-4: #888;
-  --rule: #D5D5D5;
-  --margin: 20px;
-  --hairline: 1px;
-  --rule-h: 2px;
+  --paper: #f4e7d1;
+  --paper-2: #fff8ea;
+  --paper-3: #ead8b9;
+  --photo: #fffdf7;
+  --ink: #29190f;
+  --ink-2: #4a3527;
+  --ink-3: #7c6757;
+  --ink-4: #a99682;
+  --rule: rgba(41, 25, 15, 0.16);
+  --rule-strong: rgba(41, 25, 15, 0.72);
+  --yellow: #f4bf45;
+  --red: #e15b42;
+  --blue: #2f7194;
+  --green: #6f8453;
+  --mint: #d7ead6;
+  --cream-shadow: rgba(91, 54, 24, 0.18);
+  --drop: 0 18px 46px rgba(54, 31, 15, 0.22);
+  --drop-tight: 0 10px 24px rgba(54, 31, 15, 0.16);
+  --soft-inset: inset 0 1px 0 rgba(255,255,255,0.72), inset 0 -1px 0 rgba(41,25,15,0.08);
+  --margin: clamp(16px, 5vw, 24px);
+  --dock-h: 96px;
 
-  --t-title: 30px;
-  --t-row: 19px;
-  --t-input: 20px;
-  --t-note: 16px;
-  --t-meta: 16px;
-  --t-button: 15px;
-  --t-status: 13px;
+  --t-title: clamp(46px, 14vw, 68px);
+  --t-row: 18px;
+  --t-input: 19px;
+  --t-note: 15px;
+  --t-meta: 14px;
+  --t-button: 13px;
+  --t-status: 12px;
   --t-utility: 11px;
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html {
+  min-height: 100%;
+  background: var(--paper);
+}
 html, body {
-  margin: 0; padding: 0;
-  background: var(--paper); color: var(--ink);
-  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC", "Hiragino Sans GB", sans-serif;
-  font-feature-settings: "tnum" 1, "kern" 1;
-  font-weight: 400;
-  font-size: var(--t-row);
-  line-height: 1.32;
-  -webkit-font-smoothing: antialiased;
+  margin: 0;
+  padding: 0;
+}
+body {
+  position: relative;
   min-height: 100vh;
-  padding-bottom: env(safe-area-inset-bottom);
+  min-height: 100dvh;
+  color: var(--ink);
+  font-family: "Avenir Next", "Trebuchet MS", "PingFang SC", "Noto Sans SC", "Hiragino Sans GB", sans-serif;
+  font-feature-settings: "tnum" 1, "kern" 1;
+  font-weight: 500;
+  font-size: var(--t-row);
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(244,191,69,0.28), transparent 34vh),
+    radial-gradient(circle at 92% 18%, rgba(47,113,148,0.17), transparent 28vh),
+    linear-gradient(145deg, #f9edd8 0%, #f2dfc2 52%, #ead3ad 100%);
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.24;
+  mix-blend-mode: multiply;
+  background-image:
+    repeating-radial-gradient(circle at 0 0, rgba(41,25,15,0.12) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(95deg, rgba(255,255,255,0.14) 0 1px, transparent 1px 9px);
+  z-index: 0;
+}
+body.sheet-open { overflow: hidden; }
+button, select, input {
+  font: inherit;
+  color: inherit;
+}
+button {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+select {
+  appearance: none;
+  -webkit-appearance: none;
+}
+input[type=file] { display: none; }
+
+.app-shell {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding-top: calc(10px + env(safe-area-inset-top));
 }
 
-button { font: inherit; color: inherit; background: transparent;
-  border: 0; padding: 0; cursor: pointer; }
-
-/* utility row above wordmark — BLE-dot equivalent + settings */
+/* Top device/status strip */
 .paper-utility {
-  display: flex; align-items: center; justify-content: space-between;
-  min-height: 22px;
-  padding: 6px var(--margin) 0 var(--margin);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  margin: 0 var(--margin);
+  padding: 7px 8px 7px 14px;
+  color: var(--ink-2);
+  border: 1px solid rgba(41,25,15,0.12);
+  border-radius: 999px;
+  background: rgba(255, 248, 234, 0.72);
+  box-shadow: var(--soft-inset), 0 12px 30px rgba(96, 59, 27, 0.10);
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+}
+.paper-utility__left,
+.paper-utility__right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.paper-utility__left {
+  min-width: 0;
   font-size: var(--t-utility);
-  color: var(--ink-3);
-  letter-spacing: 0.18em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
-.paper-utility__left { display: flex; align-items: center; gap: 8px; }
-.paper-utility__right { display: flex; align-items: center; gap: 14px; }
+#conn-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .paper-utility .dot {
-  width: 8px; height: 8px; border-radius: 50%; background: var(--ink);
+  position: relative;
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgba(111,132,83,0.14);
+}
+.paper-utility .dot::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border: 1px solid rgba(111,132,83,0.4);
+  border-radius: inherit;
+  animation: pulse 2.4s ease-out infinite;
+}
+@keyframes pulse {
+  0% { transform: scale(0.55); opacity: 0.55; }
+  75%, 100% { transform: scale(1.55); opacity: 0; }
+}
+.icon-button,
+.sheet__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 40px;
+  min-height: 40px;
+  border: 1px solid rgba(41,25,15,0.14);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.52);
+  box-shadow: var(--soft-inset);
+}
+.ui-icon {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: 0 0 auto;
 }
 
-/* big PHOTOS wordmark */
+/* Gallery wordmark */
 .paper-wordmark {
-  display: flex; align-items: baseline; justify-content: space-between;
-  padding: 8px var(--margin) 3px var(--margin);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px var(--margin) 8px;
 }
 .paper-wordmark__title {
+  font-family: "Avenir Next Condensed", "DIN Condensed", "Impact", "PingFang SC", sans-serif;
   font-size: var(--t-title);
-  letter-spacing: 0.06em;
-  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -0.045em;
+  line-height: 0.86;
+  text-transform: uppercase;
+  text-shadow: 0 2px 0 rgba(255,255,255,0.68);
+}
+.paper-wordmark__title::after {
+  content: attr(data-subtitle);
+  display: block;
+  margin-top: 9px;
+  font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  color: var(--ink-3);
 }
 .paper-wordmark__meta {
-  font-size: var(--t-meta);
-  font-feature-settings: "tnum" 1;
+  min-width: 70px;
+  padding: 8px 10px 7px;
+  border: 1px solid rgba(41,25,15,0.16);
+  border-radius: 17px;
+  background: rgba(255,255,255,0.5);
+  box-shadow: var(--soft-inset);
+  font-family: "Avenir Next Condensed", "DIN Condensed", sans-serif;
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 0.9;
+  text-align: center;
 }
-
+.paper-wordmark__meta::after {
+  content: attr(data-label);
+  display: block;
+  margin-top: 5px;
+  font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
 .paper-rule--thick {
-  height: var(--rule-h);
-  background: transparent;
-  margin: 6px var(--margin) 0 var(--margin);
+  height: 12px;
+  margin: 6px var(--margin) 0;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, var(--red), var(--yellow) 38%, var(--green) 62%, var(--blue)),
+    var(--ink);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.38), 0 8px 20px rgba(69,38,18,0.12);
 }
 .paper-rule--hair {
-  height: var(--hairline);
-  background: var(--rule);
+  height: 1px;
   margin: 0 var(--margin);
+  background: var(--rule);
 }
 
-/* photo grid */
+.gallery-shell {
+  position: relative;
+  flex: 1 1 auto;
+  padding-bottom: calc(var(--dock-h) + env(safe-area-inset-bottom));
+}
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 12px;
-  padding: 16px var(--margin) 28px var(--margin);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px 14px;
+  align-content: start;
+  padding: 18px var(--margin) 30px;
 }
 .tile {
+  --tilt: 0deg;
   position: relative;
-  aspect-ratio: 2 / 3;
-  background: #EEE;
-  overflow: hidden;
+  min-width: 0;
+  padding: 9px 9px 36px;
+  overflow: visible;
   cursor: pointer;
+  border: 1px solid rgba(41,25,15,0.10);
+  border-radius: 5px 5px 14px 14px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,250,238,0.96)),
+    var(--photo);
+  box-shadow: 0 14px 28px rgba(56,32,14,0.18), 0 1px 0 rgba(255,255,255,0.72) inset;
+  transform: rotate(var(--tilt)) translateZ(0);
+  transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+  touch-action: manipulation;
+}
+.tile:nth-child(4n+1) { --tilt: -2.2deg; }
+.tile:nth-child(4n+2) { --tilt: 1.4deg; }
+.tile:nth-child(4n+3) { --tilt: -0.8deg; }
+.tile:nth-child(4n+4) { --tilt: 2.1deg; }
+.tile::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -11px;
+  width: 44%;
+  height: 22px;
+  border-radius: 2px;
+  background: rgba(246, 222, 158, 0.62);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.55) inset;
+  transform: translateX(-50%) rotate(calc(var(--tilt) * -0.65));
+  pointer-events: none;
+}
+.tile:active,
+.tile.is-pressing {
+  transform: rotate(0deg) translateY(-5px) scale(1.025);
+  box-shadow: 0 24px 42px rgba(56,32,14,0.24);
+  z-index: 2;
+}
+.tile__photo {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  border-radius: 3px;
+  background: linear-gradient(135deg, #d6c6ad, #f9f1df);
+  box-shadow: inset 0 0 0 1px rgba(41,25,15,0.08);
 }
 .tile img {
-  width: 100%; height: 100%;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   display: block;
+  transform: scale(1.01);
 }
-.tile.is-active::after {
-  content: "";
-  position: absolute; inset: 0;
-  border: 2px solid var(--ink);
+.tile__shine {
+  position: absolute;
+  inset: 0;
   pointer-events: none;
+  background: linear-gradient(115deg, rgba(255,255,255,0.35), transparent 36%, transparent 62%, rgba(255,255,255,0.14));
+  mix-blend-mode: screen;
 }
 .tile__caption {
-  position: absolute; left: 0; right: 0; bottom: 0;
-  padding: 4px 6px;
-  font-size: var(--t-utility);
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 9px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--ink-2);
+  background: transparent;
+  pointer-events: none;
+  font-family: "Marker Felt", "Avenir Next", "Trebuchet MS", "PingFang SC", sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+.tile__caption span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tile__caption span:last-child {
+  flex: 0 0 auto;
+  color: var(--ink-4);
+  font-family: "Avenir Next Condensed", "DIN Condensed", sans-serif;
+  font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--paper);
-  background: rgba(0,0,0,0.55);
-  display: flex; justify-content: space-between; align-items: baseline;
+}
+.tile.is-active {
+  border-color: rgba(225,91,66,0.74);
+  box-shadow: 0 16px 32px rgba(225,91,66,0.18), 0 18px 34px rgba(56,32,14,0.18);
+}
+.tile.is-active::after {
+  content: "showing";
+  position: absolute;
+  right: -7px;
+  top: 14px;
+  padding: 5px 8px 4px;
+  border-radius: 999px;
+  color: #fffaf1;
+  background: var(--red);
+  box-shadow: 0 8px 18px rgba(225,91,66,0.26);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   pointer-events: none;
 }
 
-/* empty state */
 .paper-empty {
-  padding: 60px var(--margin);
+  margin: 18px var(--margin) 34px;
+  min-height: calc(100vh - 270px);
+  min-height: calc(100dvh - 270px);
+  display: grid;
+  place-items: center;
+  padding: 26px;
+  border: 1px dashed rgba(41,25,15,0.22);
+  border-radius: 30px;
   color: var(--ink-3);
-  font-size: var(--t-note);
+  background: rgba(255,248,234,0.54);
+  box-shadow: var(--soft-inset);
+  text-align: center;
+}
+.empty-card {
+  width: min(250px, 72vw);
+  padding: 14px 14px 42px;
+  border: 1px solid rgba(41,25,15,0.10);
+  border-radius: 6px 6px 18px 18px;
+  background: var(--photo);
+  box-shadow: var(--drop-tight);
+  transform: rotate(-2deg);
+}
+.empty-card__image {
+  aspect-ratio: 2 / 3;
+  border-radius: 4px;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255,255,255,0.78) 0 17%, transparent 18%),
+    linear-gradient(145deg, rgba(47,113,148,0.22), rgba(244,191,69,0.30)),
+    repeating-linear-gradient(90deg, rgba(41,25,15,0.06) 0 1px, transparent 1px 10px);
+}
+.empty-card__title {
+  margin: 16px 0 4px;
+  color: var(--ink);
+  font-family: "Avenir Next Condensed", "DIN Condensed", sans-serif;
+  font-size: 24px;
+  font-weight: 900;
   letter-spacing: 0.02em;
 }
+.empty-card__note {
+  margin: 0;
+  font-size: var(--t-note);
+  color: var(--ink-3);
+}
 
-/* bottom action bar — sticky toolbar with text-only buttons */
+/* Bottom dock is fixed and flush with the phone bottom/safe area. */
 .paper-bar {
-  position: sticky; bottom: 0;
-  background: var(--paper);
-  border-top: var(--rule-h) solid var(--ink);
-  display: flex; justify-content: space-between; align-items: stretch;
-  padding-bottom: env(safe-area-inset-bottom);
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px var(--margin) calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(41,25,15,0.14);
+  border-radius: 28px 28px 0 0;
+  background: rgba(255,248,234,0.88);
+  box-shadow: 0 -18px 42px rgba(74,43,20,0.22), inset 0 1px 0 rgba(255,255,255,0.72);
+  backdrop-filter: blur(22px) saturate(1.12);
+  -webkit-backdrop-filter: blur(22px) saturate(1.12);
 }
 .paper-bar button {
-  flex: 1;
-  padding: 16px 0;
+  min-width: 0;
+  min-height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 0 14px;
+  border: 1px solid rgba(41,25,15,0.14);
+  border-radius: 18px;
+  background: rgba(255,255,255,0.48);
+  box-shadow: var(--soft-inset);
   font-size: var(--t-button);
-  letter-spacing: 0.12em;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  line-height: 1;
+  text-align: center;
   text-transform: uppercase;
-  border-right: var(--hairline) solid var(--rule);
+  white-space: nowrap;
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
-.paper-bar button:last-child { border-right: 0; }
-.paper-bar button:disabled { color: var(--ink-4); cursor: default; }
+.paper-bar button:active { transform: translateY(2px) scale(0.99); }
+.paper-bar #btn-upload {
+  color: #fff9ec;
+  border-color: rgba(41,25,15,0.7);
+  background: linear-gradient(135deg, #2c1a10, #563620);
+  box-shadow: 0 12px 26px rgba(41,25,15,0.24), inset 0 1px 0 rgba(255,255,255,0.2);
+}
+.paper-bar .ui-icon { width: 20px; height: 20px; }
 
-/* full-screen modal overlay (upload, detail, settings) */
+/* Full-screen modal overlay (upload, detail, settings) */
 .sheet {
-  position: fixed; inset: 0;
-  background: var(--paper);
+  position: fixed;
+  inset: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
   display: none;
   flex-direction: column;
-  z-index: 10;
+  z-index: 60;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 14% 2%, rgba(244,191,69,0.18), transparent 38vh),
+    linear-gradient(180deg, #fff4df 0%, #f2dfc2 100%);
+  padding-top: env(safe-area-inset-top);
 }
-.sheet.is-open { display: flex; }
+.sheet.is-open {
+  display: flex;
+  animation: sheetIn 220ms cubic-bezier(.2,.85,.2,1);
+}
+@keyframes sheetIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 .sheet__head {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px var(--margin);
-  border-bottom: var(--rule-h) solid var(--ink);
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px var(--margin) 10px;
+  border-bottom: 1px solid rgba(41,25,15,0.12);
+  background: rgba(255,248,234,0.70);
+  box-shadow: 0 10px 28px rgba(74,43,20,0.08);
+  backdrop-filter: blur(18px) saturate(1.08);
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
 }
 .sheet__title {
-  font-size: var(--t-row);
-  letter-spacing: 0.12em;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: "Avenir Next Condensed", "DIN Condensed", "PingFang SC", sans-serif;
+  font-size: clamp(21px, 6vw, 25px);
+  font-weight: 900;
+  line-height: 1.04;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 .sheet__close {
-  font-size: var(--t-row);
-  letter-spacing: 0.12em;
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 0 12px;
+  font-size: var(--t-button);
+  font-weight: 900;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
 }
 .sheet__body {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .sheet__foot {
-  border-top: var(--rule-h) solid var(--ink);
+  flex: 0 0 auto;
   display: flex;
-  padding-bottom: env(safe-area-inset-bottom);
+  gap: 8px;
+  padding: 10px var(--margin) calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(41,25,15,0.14);
+  background: rgba(255,248,234,0.90);
+  box-shadow: 0 -16px 32px rgba(74,43,20,0.12), inset 0 1px 0 rgba(255,255,255,0.72);
+  backdrop-filter: blur(20px) saturate(1.1);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
 }
 .sheet__foot button {
-  flex: 1;
-  padding: 16px 0;
+  flex: 1 1 0;
+  min-height: 52px;
+  padding: 0 10px;
+  border: 1px solid rgba(41,25,15,0.14);
+  border-radius: 16px;
+  background: rgba(255,255,255,0.54);
+  box-shadow: var(--soft-inset);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: var(--t-button);
-  letter-spacing: 0.12em;
+  font-weight: 900;
+  letter-spacing: 0.10em;
+  line-height: 1.08;
+  text-align: center;
   text-transform: uppercase;
-  border-right: var(--hairline) solid var(--rule);
 }
-.sheet__foot button:last-child { border-right: 0; }
-.sheet__foot button.is-primary { background: var(--ink); color: var(--paper); }
-.sheet__foot button:disabled { color: var(--ink-4); cursor: default; }
+.sheet__foot button.is-primary {
+  color: #fff9ec;
+  border-color: rgba(41,25,15,0.76);
+  background: linear-gradient(135deg, #2d1b10, #5b3720);
+  box-shadow: 0 12px 24px rgba(41,25,15,0.23), inset 0 1px 0 rgba(255,255,255,0.18);
+}
 
-/* crop / rotate stage */
+/* Crop / rotate stage */
 .stage {
   position: relative;
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
-  width: 100%;
+  width: auto;
+  margin: 12px var(--margin) 10px;
   overflow: hidden;
-  background: var(--ink);
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 50% 44%, rgba(255,255,255,0.05), transparent 42%),
+    linear-gradient(145deg, #1f160f, #0f0c0a);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08), var(--drop);
   touch-action: none;
   user-select: none;
 }
+.stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.04) 0 1px, transparent 1px 5px);
+  opacity: 0.28;
+}
 .stage canvas {
   position: absolute;
-  top: 50%; left: 50%;
+  top: 50%;
+  left: 50%;
   transform-origin: 0 0;
-  /* set by JS via transform */
 }
 .stage__mask {
-  position: absolute; top: 50%; left: 50%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
   transform: translate(-50%, -50%);
   pointer-events: none;
-  /* dimensions set by JS to maintain 2:3 aspect and fit viewport */
-  box-shadow: 0 0 0 9999px rgba(250,250,247,0.85);
-  outline: 1px solid var(--ink);
+  border-radius: 4px;
+  box-shadow: 0 18px 0 22px rgba(255,250,239,0.92), 0 22px 34px 20px rgba(0,0,0,0.22), 0 0 0 9999px rgba(17,12,8,0.72);
+  outline: 2px solid rgba(255,250,239,0.96);
 }
 .stage__hint {
-  position: absolute; left: 0; right: 0; bottom: 12px;
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 18px;
+  padding: 9px 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 999px;
   text-align: center;
   font-size: var(--t-utility);
-  letter-spacing: 0.18em;
+  font-weight: 900;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: rgba(255,250,239,0.76);
+  background: rgba(0,0,0,0.22);
+  backdrop-filter: blur(10px);
   pointer-events: none;
 }
+.crop-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 0 var(--margin) 12px;
+  background: transparent;
+}
+.crop-actions button,
+.stage-tools__btnrow button,
+.adjust-grid button,
+.calib-actions button,
+.preset-row select,
+.preset-row button {
+  min-height: 44px;
+  border: 1px solid rgba(41,25,15,0.16);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.52);
+  box-shadow: var(--soft-inset);
+  font-size: var(--t-utility);
+  font-weight: 900;
+  letter-spacing: 0.10em;
+  line-height: 1.1;
+  text-align: center;
+  text-transform: uppercase;
+}
+.crop-actions button,
+.stage-tools__btnrow button,
+.adjust-grid button,
+.calib-actions button,
+.preset-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+}
+.crop-actions button:active,
+.stage-tools__btnrow button:active,
+.adjust-grid button:active,
+.calib-actions button:active,
+.preset-row button:active { transform: translateY(1px); }
 
-/* settings rows */
-.row {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px var(--margin);
-  border-bottom: var(--hairline) solid var(--rule);
-}
-.row__label {
-  font-size: var(--t-row);
-  letter-spacing: 0.04em;
-}
-.row__value {
-  font-size: var(--t-meta);
-  color: var(--ink-3);
-  font-feature-settings: "tnum" 1;
-}
-.row input[type=range] {
-  width: 60%;
-  accent-color: var(--ink);
-}
-
-/* detail sheet image preview */
+/* Detail sheet image preview */
 .detail__img {
-  flex: 1; min-height: 0;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--ink);
-  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px var(--margin);
+  background: radial-gradient(circle at 50% 42%, rgba(255,255,255,0.4), transparent 38%), rgba(79,51,29,0.08);
 }
 .detail__img img {
+  display: block;
+  width: min(78vw, 360px);
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  background: var(--paper);
+  padding: 12px 12px 54px;
+  border-radius: 7px 7px 18px 18px;
+  background: var(--photo);
+  box-shadow: var(--drop);
 }
 
-/* per-image adjustment panel inside the upload sheet */
+/* Settings rows */
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 12px var(--margin) 0;
+  padding: 16px;
+  border: 1px solid rgba(41,25,15,0.12);
+  border-radius: 20px;
+  background: rgba(255,255,255,0.46);
+  box-shadow: var(--soft-inset);
+}
+.row__label {
+  min-width: 0;
+  color: var(--ink);
+  font-size: var(--t-row);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+.row__value {
+  flex: 0 0 auto;
+  color: var(--ink-3);
+  font-family: "Avenir Next Condensed", "DIN Condensed", sans-serif;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+.settings-range {
+  padding: 0 var(--margin) 14px;
+}
+.row input[type=range],
+.calib-sliders input[type=range] {
+  width: 100%;
+  accent-color: var(--ink);
+}
+.settings-range input[type=range] {
+  width: 100%;
+  margin-top: 10px;
+  accent-color: var(--ink);
+}
+
+
+.settings-panel {
+  padding: 14px var(--margin) calc(22px + env(safe-area-inset-bottom));
+}
+.settings-hero {
+  margin: 0 0 16px;
+  padding: 20px;
+  border: 1px solid rgba(41,25,15,0.12);
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 85% 10%, rgba(244,191,69,0.28), transparent 38%),
+    linear-gradient(145deg, rgba(255,255,255,0.72), rgba(255,248,234,0.52));
+  box-shadow: var(--drop-tight), var(--soft-inset);
+}
+.settings-hero__eyebrow {
+  margin: 0 0 7px;
+  color: var(--red);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.settings-hero__title {
+  margin: 0;
+  font-family: "Avenir Next Condensed", "DIN Condensed", "PingFang SC", sans-serif;
+  font-size: 32px;
+  font-weight: 900;
+  line-height: 0.98;
+  letter-spacing: -0.02em;
+}
+.settings-hero__text {
+  margin: 10px 0 0;
+  color: var(--ink-3);
+  font-size: 14px;
+  line-height: 1.48;
+}
+.setting-group {
+  margin-top: 18px;
+}
+.setting-group__title {
+  margin: 0 0 9px;
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.setting-card {
+  margin-top: 10px;
+  padding: 15px 16px 16px;
+  border: 1px solid rgba(41,25,15,0.12);
+  border-radius: 22px;
+  background: rgba(255,255,255,0.52);
+  box-shadow: var(--soft-inset);
+}
+.setting-card--action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  cursor: pointer;
+}
+.setting-card__main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.setting-card__text {
+  min-width: 0;
+}
+.setting-card__label {
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.18;
+}
+.setting-card__hint {
+  margin-top: 4px;
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.setting-card__value {
+  flex: 0 0 auto;
+  min-width: 54px;
+  padding: 5px 9px 4px;
+  border-radius: 999px;
+  color: var(--ink);
+  background: rgba(244,191,69,0.22);
+  font-family: "Avenir Next Condensed", "DIN Condensed", sans-serif;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-align: center;
+}
+.setting-card input[type=range] {
+  width: 100%;
+  margin: 13px 0 0;
+  accent-color: var(--ink);
+}
+.setting-select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 13px;
+  padding: 0 36px 0 12px;
+  border: 1px solid rgba(41,25,15,0.14);
+  border-radius: 15px;
+  color: var(--ink);
+  background:
+    linear-gradient(45deg, transparent 50%, var(--ink) 50%),
+    linear-gradient(135deg, var(--ink) 50%, transparent 50%),
+    rgba(255,249,237,0.78);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%, 0 0;
+  background-size: 5px 5px, 5px 5px, auto;
+  background-repeat: no-repeat;
+  font-weight: 900;
+}
+.setting-text-input {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 13px;
+  padding: 0 12px;
+  border: 1px solid rgba(41,25,15,0.14);
+  border-radius: 15px;
+  color: var(--ink);
+  background: rgba(255,249,237,0.78);
+  font-size: 16px;
+  font-weight: 800;
+  box-shadow: var(--soft-inset);
+}
+.setting-text-input::placeholder {
+  color: var(--ink-4);
+}
+.setting-card__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 10px;
+  border: 1px solid rgba(41,25,15,0.16);
+  border-radius: 14px;
+  color: var(--paper-2);
+  background: linear-gradient(180deg, var(--ink-2), var(--ink));
+  box-shadow: var(--drop-tight);
+  font-size: var(--t-utility);
+  font-weight: 900;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+.setting-card__button:active { transform: translateY(1px); }
+.setting-card--firmware {
+  align-items: flex-start;
+}
+.setting-card--firmware .setting-card__value {
+  max-width: 42%;
+  overflow-wrap: anywhere;
+  line-height: 1.12;
+}
+.setting-card__chevron {
+  color: var(--red);
+  font-size: 22px;
+  line-height: 1;
+}
+.language-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 5px;
+  border: 1px solid rgba(41,25,15,0.12);
+  border-radius: 18px;
+  background: rgba(41,25,15,0.06);
+}
+.language-toggle button {
+  min-height: 44px;
+  border-radius: 14px;
+  color: var(--ink-3);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+.language-toggle button.is-active {
+  color: #fff9ec;
+  background: linear-gradient(135deg, #2d1b10, #5b3720);
+  box-shadow: 0 8px 18px rgba(41,25,15,0.18), inset 0 1px 0 rgba(255,255,255,0.18);
+}
+.adjust-panel__head {
+  padding: 15px 16px 4px;
+}
+.adjust-panel__title {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+.adjust-panel__hint {
+  margin-top: 5px;
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.42;
+}
+
+/* Adjust preview and controls */
 .adjust-panel {
-  border-top: var(--hairline) solid var(--rule);
-  background: var(--paper);
+  flex: 0 0 auto;
   max-height: 50%;
   overflow-y: auto;
+  margin: 0 var(--margin) 10px;
+  border: 1px solid rgba(41,25,15,0.12);
+  border-radius: 22px;
+  background: rgba(255,248,234,0.68);
+  box-shadow: var(--soft-inset);
 }
 .adjust-panel > summary {
   list-style: none;
-  padding: 12px var(--margin);
-  font-size: var(--t-row);
-  letter-spacing: 0.12em;
+  padding: 14px 16px;
+  font-size: var(--t-button);
+  font-weight: 900;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
   cursor: pointer;
 }
+.adjust-panel > summary::-webkit-details-marker { display: none; }
 .adjust-panel > summary::after {
-  content: " ▾";
-  color: var(--ink-3);
+  content: "  +";
+  color: var(--red);
 }
-.adjust-panel[open] > summary::after { content: " ▴"; }
+.adjust-panel[open] > summary::after { content: "  -"; }
 .adjust-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 4px 0;
-  padding: 0 var(--margin) 14px;
+  gap: 4px;
+  padding: 0 16px 16px;
 }
-.adjust-grid label {
+.adjust-grid label,
+.calib-sliders label {
   display: flex;
-  justify-content: flex-start;
-  font-size: var(--t-meta);
-  letter-spacing: 0.04em;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px 0 0;
   color: var(--ink-3);
-  padding: 6px 0 0;
+  font-size: var(--t-meta);
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
-.adjust-grid label span {
-  font-feature-settings: "tnum" 1;
+.adjust-grid label span,
+.calib-sliders label span {
   color: var(--ink);
+  font-family: "Avenir Next Condensed", "DIN Condensed", sans-serif;
+  font-weight: 900;
 }
 .adjust-grid input[type=range] {
   width: 100%;
   accent-color: var(--ink);
 }
-.adjust-grid button {
-  margin-top: 10px;
-  padding: 10px;
-  background: transparent;
-  border: var(--hairline) solid var(--ink);
-  font-size: var(--t-utility);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-/* Stage tools — a single horizontal band right below the cropping stage
-   that holds the live preview and the cropping-side buttons (Rotate, Fit).
-   Sits above the adjust panel so it's always visible during cropping.
-   Tap the preview canvas itself to toggle source ↔ dithered — no separate
-   button needed. */
-.crop-actions {
-  display: flex;
-  gap: 10px;
-  padding: 10px var(--margin);
-  border-top: var(--hairline) solid var(--rule);
-  background: var(--paper);
-}
-.crop-actions button {
-  flex: 1;
-  padding: 12px;
-  background: transparent;
-  border: var(--hairline) solid var(--ink);
-  font-size: var(--t-utility);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
+.adjust-grid button { margin-top: 10px; }
 .stage-tools {
   display: flex;
   align-items: stretch;
   gap: 12px;
   padding: 10px var(--margin);
-  border-top: var(--hairline) solid var(--rule);
-  background: var(--paper);
+  background: transparent;
 }
 .stage-tools canvas {
   width: min(46vw, 180px);
   height: min(69vw, 270px);
-  background: var(--paper-3, #ddd);
-  border: var(--hairline) solid var(--rule);
   flex: 0 0 auto;
   cursor: pointer;
+  border: 10px solid var(--photo);
+  border-bottom-width: 36px;
+  border-radius: 6px 6px 15px 15px;
+  background: #ddd0b8;
+  box-shadow: var(--drop-tight);
   -webkit-tap-highlight-color: transparent;
 }
 .stage-tools__buttons {
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
+  gap: 10px;
   flex: 1 1 auto;
-  font-size: var(--t-meta);
+  min-width: 0;
   color: var(--ink-3);
+  font-size: var(--t-meta);
 }
 .stage-tools__btnrow {
   display: flex;
   gap: 10px;
 }
-.stage-tools__btnrow button {
-  flex: 1;
-  padding: 10px;
-  background: transparent;
-  border: var(--hairline) solid var(--ink);
-  font-size: var(--t-utility);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  cursor: pointer;
+.stage-tools__btnrow button { flex: 1; }
+#preview-status {
+  padding: 2px 0;
+  color: var(--ink-2);
+  font-weight: 900;
+  letter-spacing: 0.02em;
 }
-#preview-status { letter-spacing: 0.04em; padding: 2px 0; }
 #sheet-upload.upload-crop .adjust-step { display: none; }
 #sheet-upload.upload-adjust .crop-step { display: none; }
 #sheet-upload.upload-adjust .sheet__body {
   gap: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 #sheet-upload.upload-adjust .stage-tools {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
-  padding: 8px var(--margin) 6px;
+  gap: 10px;
+  padding: 10px var(--margin) 8px;
 }
 .adjust-preview-box {
-  height: var(--adjust-preview-h, min(50dvh, 390px));
-  min-height: 160px;
+  height: var(--adjust-preview-h, min(42dvh, 330px));
+  min-height: 170px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--paper-2);
-  border: var(--hairline) solid var(--rule);
   overflow: hidden;
+  padding: 12px 12px 46px;
+  border: 1px solid rgba(41,25,15,0.10);
+  border-radius: 7px 7px 18px 18px;
+  background: var(--photo);
+  box-shadow: var(--drop-tight);
 }
 #sheet-upload.upload-adjust .stage-tools canvas {
-  height: min(100%, calc((100vw - 2 * var(--margin)) * 1.5));
   width: auto;
+  height: min(100%, calc((100vw - 2 * var(--margin) - 24px) * 1.5));
+  max-width: 100%;
   aspect-ratio: 2 / 3;
-  background: var(--paper);
+  border: 0;
+  border-radius: 3px;
+  box-shadow: none;
+  background: #ddd0b8;
 }
 #sheet-upload.upload-adjust .adjust-panel {
   flex: 0 0 auto;
   min-height: 0;
   max-height: none;
-  border-top: var(--hairline) solid var(--rule);
-  background: var(--paper);
-  overflow: auto;
-}
-#sheet-upload.upload-adjust .adjust-panel[open] {
-  flex: 1 1 auto;
-}
-#sheet-upload.upload-adjust .adjust-panel summary {
-  padding: 10px var(--margin);
-  color: var(--ink);
-  cursor: pointer;
-  font-size: var(--t-utility);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  list-style: none;
-}
-#sheet-upload.upload-adjust .adjust-panel summary::-webkit-details-marker { display: none; }
-#sheet-upload.upload-adjust .adjust-panel summary::after {
-  content: "Advanced manual controls";
-  display: block;
-  margin-top: 3px;
-  color: var(--ink-3);
-  font-size: var(--t-meta);
-  letter-spacing: 0.04em;
-  text-transform: none;
-}
-#sheet-upload.upload-adjust .adjust-panel[open] summary::after {
-  content: "Auto remains the default; changes here override the current preset";
+  overflow: visible;
 }
 .preset-row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
   padding: 8px 0 10px;
 }
 .stage-tools .preset-row { padding: 0; }
+.preset-row select {
+  min-width: 0;
+  padding: 0 34px 0 12px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink) 50%),
+    linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+.preset-row button { padding: 0 12px; }
 .adjust-splitter {
-  height: 18px;
-  border-top: var(--hairline) solid var(--rule);
-  border-bottom: var(--hairline) solid var(--rule);
-  background: linear-gradient(to bottom, transparent 7px, var(--ink-4) 7px, var(--ink-4) 10px, transparent 10px);
+  height: 20px;
+  margin: 0 var(--margin) 8px;
+  border: 1px solid rgba(41,25,15,0.12);
+  border-radius: 999px;
+  background:
+    linear-gradient(to bottom, transparent 8px, rgba(41,25,15,0.36) 8px, rgba(41,25,15,0.36) 11px, transparent 11px),
+    rgba(255,255,255,0.35);
+  box-shadow: var(--soft-inset);
   cursor: ns-resize;
   touch-action: none;
-}
-.preset-row select, .preset-row button {
-  padding: 10px;
-  border: var(--hairline) solid var(--ink);
-  background: transparent;
-  color: var(--ink);
-  font-size: var(--t-utility);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  display: none;
 }
 #btn-upload-back { display: none; }
 #btn-send { display: none; }
 #sheet-upload.upload-adjust #btn-upload-back,
-#sheet-upload.upload-adjust #btn-send { display: inline-block; }
+#sheet-upload.upload-adjust #btn-send { display: inline-flex; }
 #sheet-upload.upload-adjust #btn-upload-next { display: none; }
-#sheet-upload.upload-crop #btn-upload-next { display: inline-block; }
+#sheet-upload.upload-crop #btn-upload-next { display: inline-flex; }
 
-/* Custom drag-only slider.  Replaces <input type="range"> so:
-   (a) only pointerdown on the thumb starts a value change — clicking the
-       track is a no-op (kills the "误触" jump-to-position behaviour);
-   (b) we can give the row a generous right-edge gutter so reaching past
-       the end toward Send doesn't graze the slider. */
+/* Custom drag-only slider */
 .slider {
   position: relative;
-  /* Outer padding gives:
-       - 14px on the left so the thumb at value=min has room
-       - 56px on the right as the "safety gutter" (≈ thumb width × 2.5).
-         Phones with edge-grip rejection still allow drags here; we just
-         want a deliberate buffer between the slider and the screen edge. */
-  padding: 4px 56px 4px 14px;
+  padding: 6px 54px 6px 14px;
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
-  touch-action: pan-y;        /* allow vertical page scroll, block horizontal */
+  touch-action: pan-y;
 }
 .slider__inner {
   position: relative;
-  height: 28px;
+  height: 30px;
 }
-.slider__track {
-  position: absolute;
-  top: 50%; left: 0; right: 0;
-  height: 2px;
-  transform: translateY(-50%);
-  background: var(--ink-4);
-}
+.slider__track,
 .slider__fill {
   position: absolute;
-  top: 50%; left: 0;
-  width: 50%;     /* set inline by JS */
-  height: 2px;
+  top: 50%;
+  left: 0;
+  height: 4px;
   transform: translateY(-50%);
-  background: var(--ink);
+  border-radius: 999px;
+}
+.slider__track {
+  right: 0;
+  background: rgba(41,25,15,0.16);
+}
+.slider__fill {
+  width: 50%;
+  background: linear-gradient(90deg, var(--red), var(--yellow));
   pointer-events: none;
 }
 .slider__thumb {
   position: absolute;
-  top: 50%; left: 50%;     /* left set inline by JS */
-  width: 40px; height: 40px;
+  top: 50%;
+  left: 50%;
+  width: 42px;
+  height: 42px;
   transform: translate(-50%, -50%);
-  background: transparent;
   border-radius: 50%;
+  background: transparent;
   cursor: grab;
-  touch-action: none;       /* take over all touch on the thumb */
+  touch-action: none;
 }
 .slider__thumb::after {
   content: "";
   position: absolute;
-  left: 50%; top: 50%;
-  width: 22px; height: 22px;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 22px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
-  background: var(--ink);
+  background: var(--photo);
+  border: 4px solid var(--ink);
+  box-shadow: 0 5px 12px rgba(41,25,15,0.18);
 }
 .slider__thumb.is-dragging { cursor: grabbing; }
+.slider__thumb.is-dragging::after { transform: translate(-50%, -50%) scale(1.12); }
 
-/* calibration wizard */
+/* Calibration wizard */
 .calib-progress {
   display: flex;
-  gap: 6px;
-  padding: 14px var(--margin) 8px;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 18px var(--margin) 8px;
 }
 .calib-progress span {
-  flex: 1;
-  height: 4px;
-  background: var(--ink-4);
+  flex: 1 1 14px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(41,25,15,0.14);
 }
-.calib-progress span.is-done   { background: var(--ink-2); }
-.calib-progress span.is-active { background: var(--ink); }
+.calib-progress span.is-done { background: var(--ink-4); }
+.calib-progress span.is-active { background: linear-gradient(90deg, var(--red), var(--yellow)); }
 
-.calib-instructions {
-  padding: 0 var(--margin) 10px;
-  font-size: var(--t-meta);
+.calib-target-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 10px var(--margin) 8px;
+  padding: 15px 16px;
+  border: 1px solid rgba(41,25,15,0.12);
+  border-radius: 22px;
+  background: rgba(255,255,255,0.52);
+  box-shadow: var(--soft-inset);
+}
+.calib-target-card__eyebrow {
   color: var(--ink-3);
-  line-height: 1.5;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.calib-target-card__name {
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+.calib-target-card__kind {
+  flex: 0 0 auto;
+  max-width: 44%;
+  padding: 6px 10px 5px;
+  border-radius: 999px;
+  color: var(--ink);
+  background: rgba(244,191,69,0.24);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.1;
+  text-align: center;
 }
 
 .calib-actions {
-  display: flex; align-items: center; gap: 10px;
-  padding: 6px var(--margin);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 8px;
+  padding: 8px var(--margin) 10px;
 }
 .calib-actions button {
-  padding: 10px 14px;
-  background: transparent;
-  border: var(--hairline) solid var(--ink);
-  font-size: var(--t-utility);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  cursor: pointer;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 16px;
+  white-space: nowrap;
+  letter-spacing: 0.03em;
+  text-transform: none;
 }
 .calib-actions__hint {
-  font-size: var(--t-meta);
+  min-width: 0;
+  padding: 0 6px;
   color: var(--ink-3);
-}
-
-.calib-swatch-big {
-  height: 160px;
-  margin: 12px var(--margin);
-  border: 1px solid var(--ink);
-}
-
-.calib-sliders {
-  display: grid; grid-template-columns: 1fr;
-  gap: 2px;
-  padding: 6px var(--margin);
-}
-.calib-sliders label {
-  display: flex; justify-content: space-between;
-  font-size: var(--t-meta);
-  letter-spacing: 0.04em;
-  color: var(--ink-3);
-  padding-top: 8px;
-}
-.calib-sliders label span {
-  color: var(--ink);
-  font-feature-settings: "tnum" 1;
-}
-.calib-sliders input[type=range] {
-  width: 100%;
-  accent-color: var(--ink);
-}
-
-.calib-readout {
-  padding: 10px var(--margin) 18px;
+  font-size: 12px;
+  line-height: 1.35;
   text-align: center;
-  font-size: var(--t-meta);
-  font-feature-settings: "tnum" 1;
+}
+.calib-swatch-big {
+  height: 170px;
+  margin: 12px var(--margin);
+  border: 10px solid var(--photo);
+  border-bottom-width: 38px;
+  border-radius: 6px 6px 18px 18px;
+  box-shadow: var(--drop-tight);
+}
+.calib-measure-form {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin: 0 var(--margin) 16px;
+  padding: 12px 16px 16px;
+  border: 1px solid rgba(41,25,15,0.12);
+  border-radius: 22px;
+  background: rgba(255,248,234,0.66);
+  box-shadow: var(--soft-inset);
+}
+.calib-measure-form label {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
   color: var(--ink-3);
+  font-size: var(--t-meta);
+  font-weight: 800;
+}
+.calib-measure-form input,
+.calib-measure-form select {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid rgba(41,25,15,0.18);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.58);
+  box-shadow: var(--soft-inset);
+  font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+}
+.calib-measure-form select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink) 50%),
+    linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 34px;
+}
+.calib-measure-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.calib-measure-actions button {
+  min-height: 44px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid rgba(41,25,15,0.14);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.48);
+  box-shadow: var(--soft-inset);
+  font-size: 11.5px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  text-transform: none;
+  white-space: nowrap;
+}
+.calib-readout {
+  margin: 0 var(--margin) 18px;
+  padding: 12px 14px;
+  border: 1px solid rgba(41,25,15,0.10);
+  border-radius: 18px;
+  color: var(--ink-3);
+  background: rgba(255,255,255,0.42);
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+#sheet-calib .sheet__foot button {
+  min-width: 0;
+  white-space: nowrap;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 12.5px;
 }
 
-/* toast */
+/* Toast */
 .toast {
-  position: fixed; left: 50%; bottom: 80px;
-  transform: translateX(-50%);
-  background: var(--ink); color: var(--paper);
-  padding: 10px 18px;
-  font-size: var(--t-note);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  opacity: 0;
-  transition: opacity 0.2s;
-  pointer-events: none;
+  position: fixed;
+  left: 50%;
+  bottom: calc(96px + env(safe-area-inset-bottom));
   z-index: 100;
+  max-width: min(88vw, 420px);
+  transform: translate(-50%, 10px) scale(0.96);
+  padding: 12px 16px;
+  border-radius: 999px;
+  color: #fff9ec;
+  background: rgba(41,25,15,0.94);
+  box-shadow: 0 14px 34px rgba(41,25,15,0.24);
+  font-size: var(--t-note);
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: none;
 }
-.toast.is-on { opacity: 1; }
+.toast.is-on {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
 
-input[type=file] { display: none; }
-
-/* loading spinner — minimal monochrome */
 .spinner {
   display: inline-block;
-  width: 12px; height: 12px;
+  width: 12px;
+  height: 12px;
   border: 2px solid var(--ink-3);
   border-top-color: transparent;
   border-radius: 50%;
@@ -633,32 +1382,85 @@ input[type=file] { display: none; }
   vertical-align: middle;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 360px) {
+  :root { --margin: 14px; }
+  .grid { gap: 18px 10px; }
+  .paper-wordmark__title { font-size: 42px; }
+  .sheet__title { font-size: 22px; }
+  .preset-row { grid-template-columns: 1fr 1fr; }
+  .preset-row select { grid-column: 1 / -1; }
+}
+
+@media (min-width: 680px) {
+  .app-shell {
+    width: min(560px, 100%);
+    margin: 0 auto;
+  }
+  .paper-bar {
+    left: 50%;
+    right: auto;
+    width: min(560px, 100%);
+    transform: translateX(-50%);
+  }
+  .sheet {
+    left: 50%;
+    right: auto;
+    width: min(560px, 100%);
+    transform: translateX(-50%);
+    box-shadow: 0 0 0 9999px rgba(41,25,15,0.28);
+  }
+  .sheet.is-open { animation-name: sheetInDesktop; }
+  @keyframes sheetInDesktop {
+    from { opacity: 0; transform: translateX(-50%) translateY(12px) scale(0.985); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  }
+  .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 </style>
 </head>
 <body>
 
-<div class="paper-utility">
-  <div class="paper-utility__left">
-    <span class="dot" id="conn-dot"></span>
-    <span id="conn-label">paper-e6</span>
+<div class="app-shell">
+  <div class="paper-utility">
+    <div class="paper-utility__left">
+      <span class="dot" id="conn-dot"></span>
+      <span id="conn-label" data-i18n="app.device">PaperColor Prints</span>
+    </div>
+    <div class="paper-utility__right">
+      <button id="btn-settings" class="icon-button" type="button" aria-label="Settings" data-i18n-aria="app.settings">
+        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10"/><path d="M18 7h2"/><circle cx="16" cy="7" r="2"/><path d="M4 17h2"/><path d="M10 17h10"/><circle cx="8" cy="17" r="2"/></svg>
+      </button>
+    </div>
   </div>
-  <div class="paper-utility__right">
-    <button id="btn-settings">⚙</button>
+
+  <div class="paper-wordmark">
+    <div class="paper-wordmark__title" data-i18n="app.wordmark" data-i18n-data-subtitle="app.wordmarkSub" data-subtitle="Instant wall">PHOTOS</div>
+    <div class="paper-wordmark__meta" id="count" data-i18n-data-label="app.prints" data-label="prints">0</div>
   </div>
+  <div class="paper-rule--thick"></div>
+
+  <main class="gallery-shell" aria-label="Photo gallery" data-i18n-aria="app.galleryActions">
+    <div id="grid" class="grid"></div>
+    <div id="empty" class="paper-empty" hidden role="button" tabindex="0" aria-label="Upload first photo" data-i18n-aria="empty.aria">
+      <div class="empty-card">
+        <div class="empty-card__image"></div>
+        <div class="empty-card__title" data-i18n="empty.title">Add a print</div>
+        <p class="empty-card__note" data-i18n="empty.note">Upload a photo to start your instant wall.</p>
+      </div>
+    </div>
+  </main>
 </div>
 
-<div class="paper-wordmark">
-  <div class="paper-wordmark__title">PHOTOS</div>
-  <div class="paper-wordmark__meta" id="count">0</div>
-</div>
-<div class="paper-rule--thick"></div>
-
-<div id="grid" class="grid"></div>
-<div id="empty" class="paper-empty" hidden>No photos yet. Tap UPLOAD to add one.</div>
-
-<div class="paper-bar">
-  <button id="btn-next">Next</button>
-  <button id="btn-upload">Upload</button>
+<div class="paper-bar" role="toolbar" aria-label="Gallery actions">
+  <button id="btn-next" type="button">
+    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12"/><path d="M13 7l5 5-5 5"/></svg>
+    <span data-i18n="action.next">Next</span>
+  </button>
+  <button id="btn-upload" type="button">
+    <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+    <span data-i18n="action.upload">Upload</span>
+  </button>
 </div>
 
 <input type="file" id="file-picker" accept="image/*">
@@ -666,92 +1468,95 @@ input[type=file] { display: none; }
 <!-- Upload / crop sheet -->
 <div id="sheet-upload" class="sheet upload-crop">
   <div class="sheet__head">
-    <div class="sheet__title">Crop &amp; Adjust</div>
-    <button class="sheet__close" data-close="sheet-upload">Cancel</button>
+    <div class="sheet__title" data-i18n="upload.initialTitle">Crop &amp; Adjust</div>
+    <button class="sheet__close" data-close="sheet-upload" data-i18n="action.cancel">Cancel</button>
   </div>
   <div class="sheet__body" style="display:flex; flex-direction:column; padding:0;">
     <div id="stage" class="stage crop-step">
       <canvas id="stage-canvas"></canvas>
       <div id="stage-mask" class="stage__mask"></div>
-      <div class="stage__hint">drag · pinch · scroll to zoom</div>
+      <div class="stage__hint" data-i18n="upload.cropHint">drag - pinch - scroll to zoom</div>
     </div>
     <div class="crop-actions crop-step">
-      <button id="btn-rotate" type="button">Rotate 90°</button>
-      <button id="btn-fit" type="button">Fit</button>
+      <button id="btn-rotate" type="button" data-i18n="action.rotate">Rotate 90 deg</button>
+      <button id="btn-fit" type="button" data-i18n="action.fit">Fit</button>
     </div>
     <div class="stage-tools adjust-step">
       <div class="adjust-preview-box">
-        <canvas id="preview-canvas" width="400" height="600" title="Tap to toggle source / dithered"></canvas>
+        <canvas id="preview-canvas" width="400" height="600" title="Toggle source / dithered preview" data-i18n-title="upload.previewTitle"></canvas>
       </div>
       <div class="stage-tools__buttons">
         <div id="preview-status">Dithered preview</div>
         <div class="preset-row">
           <select id="preset-select" aria-label="Preset"></select>
-          <button id="btn-apply-preset" type="button">Apply</button>
-          <button id="btn-auto-adjust" type="button">Auto</button>
+          <button id="btn-apply-preset" type="button" data-i18n="action.apply">Apply</button>
+          <button id="btn-auto-adjust" type="button" data-i18n="action.auto">Auto</button>
         </div>
         <div class="stage-tools__btnrow">
-          <button id="btn-save-preset" type="button">Save Preset</button>
+          <button id="btn-save-preset" type="button" data-i18n="action.savePreset">Save Preset</button>
         </div>
       </div>
     </div>
     <div id="adjust-splitter" class="adjust-splitter adjust-step" title="Drag to resize preview"></div>
     <!-- per-image adjustment panel — defaults pulled from /api/calib. -->
-    <details class="adjust-panel adjust-step" id="adjust-panel">
-      <summary>Advanced</summary>
+    <section class="adjust-panel adjust-step" id="adjust-panel">
+      <div class="adjust-panel__head">
+        <div class="adjust-panel__title" data-i18n="adjust.manualTitle">Manual controls</div>
+        <div class="adjust-panel__hint" data-i18n="adjust.manualHint">Scroll down to fine tune the paper look. Use the round handles; touching the track will not jump.</div>
+      </div>
       <div class="adjust-grid">
-        <label>Brightness <span data-val="brightness">0</span></label>
+        <label><span data-i18n="adjust.brightness">Brightness</span> <span data-val="brightness">0</span></label>
         <div class="slider" data-key="brightness" data-min="-100" data-max="100" data-step="1" data-value="0">
           <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
         </div>
-        <label>Exposure <span data-val="exposure">0</span></label>
-        <div class="slider" data-key="exposure" data-min="-100" data-max="100" data-step="1" data-value="0">
+        <label><span data-i18n="adjust.exposure">Exposure</span> <span data-val="exposure">0</span></label>
+        <div class="slider" data-key="exposure" data-min="-300" data-max="300" data-step="1" data-value="0">
           <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
         </div>
-        <label>Contrast <span data-val="contrast">106</span></label>
+        <label><span data-i18n="adjust.contrast">Contrast</span> <span data-val="contrast">106</span></label>
         <div class="slider" data-key="contrast" data-min="0" data-max="200" data-step="1" data-value="106">
           <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
         </div>
-        <label>Saturation <span data-val="saturation">106</span></label>
-        <div class="slider" data-key="saturation" data-min="0" data-max="200" data-step="1" data-value="106">
+        <label><span data-i18n="adjust.saturation">Saturation</span> <span data-val="saturation">136</span></label>
+        <div class="slider" data-key="saturation" data-min="0" data-max="200" data-step="1" data-value="136">
           <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
         </div>
-        <label>Vibrance <span data-val="vibrance">24</span></label>
-        <div class="slider" data-key="vibrance" data-min="-100" data-max="100" data-step="1" data-value="24">
+        <label><span data-i18n="adjust.vibrance">Vibrance</span> <span data-val="vibrance">64</span></label>
+        <div class="slider" data-key="vibrance" data-min="-100" data-max="100" data-step="1" data-value="64">
           <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
         </div>
-        <label>Gamma <span data-val="gamma">96</span></label>
+        <label><span data-i18n="adjust.gamma">Gamma</span> <span data-val="gamma">96</span></label>
         <div class="slider" data-key="gamma" data-min="20" data-max="300" data-step="1" data-value="96">
           <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
         </div>
-        <label>Temperature <span data-val="temperature">106</span></label>
+        <label><span data-i18n="adjust.temperature">Temperature</span> <span data-val="temperature">106</span></label>
         <div class="slider" data-key="temperature" data-min="50" data-max="150" data-step="1" data-value="106">
           <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
         </div>
-        <label>Tint <span data-val="tint">99</span></label>
+        <label><span data-i18n="adjust.tint">Tint</span> <span data-val="tint">99</span></label>
         <div class="slider" data-key="tint" data-min="50" data-max="150" data-step="1" data-value="99">
           <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
         </div>
-        <label>Smoothness <span data-val="smoothness">10</span></label>
+        <label><span data-i18n="adjust.smoothness">Smoothness</span> <span data-val="smoothness">10</span></label>
         <div class="slider" data-key="smoothness" data-min="0" data-max="100" data-step="1" data-value="10">
           <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
         </div>
-        <label>Sharpen <span data-val="sharpen">34</span></label>
+        <label><span data-i18n="adjust.sharpen">Sharpen</span> <span data-val="sharpen">34</span></label>
         <div class="slider" data-key="sharpen" data-min="0" data-max="100" data-step="1" data-value="34">
           <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
         </div>
-        <label>Vignette fix <span data-val="vignette">14</span></label>
+        <label><span data-i18n="adjust.vignette">Vignette fix</span> <span data-val="vignette">14</span></label>
         <div class="slider" data-key="vignette" data-min="-100" data-max="100" data-step="1" data-value="14">
           <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
         </div>
-        <button id="btn-reset-adjust" type="button">Reset to calibration default</button>
+        <button id="btn-reset-adjust" type="button" data-i18n="adjust.reset">Reset to calibration default</button>
       </div>
-    </details>
+    </section>
   </div>
   <div class="sheet__foot">
-    <button id="btn-upload-back" type="button">Back</button>
-    <button id="btn-upload-next" class="is-primary" type="button">Next: Adjust</button>
-    <button id="btn-send" class="is-primary">Send</button>
+    <button id="btn-upload-back" type="button" data-i18n="action.back">Back</button>
+    <button id="btn-upload-next" class="is-primary" type="button" data-i18n="action.nextAdjust">Next: Adjust</button>
+    <button id="btn-send" class="is-primary" data-i18n="action.send">Send</button>
   </div>
 </div>
 
@@ -759,82 +1564,242 @@ input[type=file] { display: none; }
 <div id="sheet-detail" class="sheet">
   <div class="sheet__head">
     <div class="sheet__title" id="detail-name">photo</div>
-    <button class="sheet__close" data-close="sheet-detail">Close</button>
+    <button class="sheet__close" data-close="sheet-detail" data-i18n="action.close">Close</button>
   </div>
   <div class="sheet__body detail__img">
     <img id="detail-img" alt="">
   </div>
   <div class="sheet__foot">
-    <button id="btn-delete">Delete</button>
-    <button id="btn-tune">Tune</button>
-    <button id="btn-show" class="is-primary">Show Now</button>
+    <button id="btn-delete" data-i18n="action.delete">Delete</button>
+    <button id="btn-tune" data-i18n="action.tune">Tune</button>
+    <button id="btn-show" class="is-primary" data-i18n="action.showNow">Show Now</button>
   </div>
 </div>
 
 <!-- Settings sheet -->
 <div id="sheet-settings" class="sheet">
   <div class="sheet__head">
-    <div class="sheet__title">Settings</div>
-    <button class="sheet__close" data-close="sheet-settings">Done</button>
+    <div class="sheet__title" data-i18n="settings.title">Settings</div>
+    <button class="sheet__close" data-close="sheet-settings" data-i18n="settings.done">Done</button>
   </div>
-  <div class="sheet__body">
-    <div class="row">
-      <div class="row__label">Loop interval</div>
-      <div class="row__value" id="loop-value">— s</div>
-    </div>
-    <div style="padding:0 var(--margin) 14px;">
-      <input id="loop-range" type="range" min="30" max="3600" step="30" value="600">
-    </div>
-    <div class="row">
-      <div class="row__label">Photos on device</div>
-      <div class="row__value" id="set-count">0</div>
-    </div>
-    <div class="row" id="row-open-calib" style="cursor:pointer;">
-      <div class="row__label">Display calibration</div>
-      <div class="row__value">edit ›</div>
-    </div>
-    <div class="row">
-      <div class="row__label">Firmware</div>
-      <div class="row__value">paper-e6</div>
-    </div>
+  <div class="sheet__body settings-panel">
+    <section class="settings-hero">
+      <p class="settings-hero__eyebrow" data-i18n="settings.title">Settings</p>
+      <h2 class="settings-hero__title" data-i18n="settings.introTitle">Frame settings</h2>
+      <p class="settings-hero__text" data-i18n="settings.introText">Set playback, sleep, image processing, calibration, firmware info, and language.</p>
+    </section>
+
+    <section class="setting-group">
+      <h3 class="setting-group__title" data-i18n="settings.slideshow">Playback</h3>
+      <div class="setting-card">
+        <div class="setting-card__main">
+          <div class="setting-card__text">
+            <div class="setting-card__label" data-i18n="settings.loop">Auto refresh interval</div>
+            <div class="setting-card__hint" data-i18n="settings.loopHint">When looping, move to the next photo after this long.</div>
+          </div>
+          <div class="setting-card__value" id="loop-value">— s</div>
+        </div>
+        <input id="loop-range" type="range" min="30" max="3600" step="30" value="600">
+      </div>
+    </section>
+
+    <section class="setting-group">
+      <h3 class="setting-group__title" data-i18n="settings.power">Power</h3>
+      <div class="setting-card">
+        <div class="setting-card__main">
+          <div class="setting-card__text">
+            <div class="setting-card__label" data-i18n="settings.wifiSleep">Sleep after phone disconnects</div>
+            <div class="setting-card__hint" data-i18n="settings.wifiSleepHint">If no phone is connected to frame Wi-Fi, sleep after this delay.</div>
+          </div>
+          <div class="setting-card__value" id="wifi-sleep-value">—</div>
+        </div>
+        <input id="wifi-sleep-range" type="range" min="30" max="86400" step="30" value="300">
+      </div>
+      <div class="setting-card">
+        <div class="setting-card__main">
+          <div class="setting-card__text">
+            <div class="setting-card__label" data-i18n="settings.wifiSsid">Frame Wi-Fi</div>
+            <div class="setting-card__hint" data-i18n="settings.wifiSsidHint">Connect your phone to this network before opening the web UI.</div>
+          </div>
+          <div class="setting-card__value" id="wifi-ssid-value">PaperColor</div>
+        </div>
+      </div>
+      <div class="setting-card">
+        <div class="setting-card__main">
+          <div class="setting-card__text">
+            <div class="setting-card__label" data-i18n="settings.wifiPassword">Wi-Fi password</div>
+            <div class="setting-card__hint" data-i18n="settings.wifiPasswordHint">Leave empty for an open hotspot. Use 8-63 characters to protect it after the next restart.</div>
+          </div>
+          <div class="setting-card__value" id="wifi-password-value" data-i18n="settings.wifiOpen">Open</div>
+        </div>
+        <input id="wifi-password-input" class="setting-text-input" type="password" maxlength="63" autocomplete="new-password" data-i18n-placeholder="settings.wifiPasswordPlaceholder" placeholder="Empty = open">
+        <button id="btn-save-wifi-password" class="setting-card__button" type="button" data-i18n="settings.saveWifiPassword">Save Wi-Fi</button>
+      </div>
+      <div class="setting-card">
+        <div class="setting-card__main">
+          <div class="setting-card__text">
+            <div class="setting-card__label" data-i18n="settings.buttonSleep">Sleep after button press</div>
+            <div class="setting-card__hint" data-i18n="settings.buttonSleepHint">After a physical-button refresh, wait this long before sleeping.</div>
+          </div>
+          <div class="setting-card__value" id="button-sleep-value">—</div>
+        </div>
+        <input id="button-sleep-range" type="range" min="1" max="60" step="1" value="3">
+      </div>
+    </section>
+
+    <section class="setting-group">
+      <h3 class="setting-group__title" data-i18n="settings.hardware">Frame hardware</h3>
+      <div class="setting-card">
+        <div class="setting-card__main">
+          <div class="setting-card__text">
+            <div class="setting-card__label" data-i18n="settings.ledBrightness">Status light</div>
+            <div class="setting-card__hint" data-i18n="settings.ledBrightnessHint">Set to 0 to turn the status light off.</div>
+          </div>
+          <div class="setting-card__value" id="led-brightness-value">—</div>
+        </div>
+        <input id="led-brightness-range" type="range" min="0" max="80" step="1" value="24">
+      </div>
+      <div class="setting-card setting-card--action" id="row-open-calib">
+        <div class="setting-card__text">
+          <div class="setting-card__label" data-i18n="settings.calibration">Display calibration</div>
+          <div class="setting-card__hint" data-i18n="settings.calibrationHint">Match browser colors to your physical panel.</div>
+        </div>
+        <div class="setting-card__chevron" data-i18n="settings.edit">Edit</div>
+      </div>
+    </section>
+
+    <section class="setting-group">
+      <h3 class="setting-group__title" data-i18n="settings.imagePipeline">Image processing</h3>
+      <div class="setting-card">
+        <div class="setting-card__main">
+          <div class="setting-card__text">
+            <div class="setting-card__label" data-i18n="settings.ditherMode">Dither mode</div>
+            <div class="setting-card__hint" data-i18n="settings.ditherModeHint">E6 Mix usually looks best on this panel; Classic keeps the older look.</div>
+          </div>
+        </div>
+        <select id="dither-mode-select" class="setting-select">
+          <option value="e6-mix" data-i18n="settings.ditherE6Mix">E6 Mix (default)</option>
+          <option value="classic" data-i18n="settings.ditherClassic">Classic VED</option>
+        </select>
+      </div>
+      <div class="setting-card">
+        <div class="setting-card__main">
+          <div class="setting-card__text">
+            <div class="setting-card__label" data-i18n="settings.autoExposure">Auto brightness bias</div>
+            <div class="setting-card__hint" data-i18n="settings.autoExposureHint">Default is -1/3 EV; range is +/-3 EV for difficult E6 lighting.</div>
+          </div>
+          <div class="setting-card__value" id="auto-ae-value">-1/3 EV</div>
+        </div>
+        <input id="auto-ae-range" type="range" min="-300" max="300" step="1" value="-33">
+      </div>
+      <div class="setting-card">
+        <div class="setting-card__main">
+          <div class="setting-card__text">
+            <div class="setting-card__label" data-i18n="settings.autoTemperature">Auto temperature bias</div>
+            <div class="setting-card__hint" data-i18n="settings.autoTemperatureHint">Positive makes Auto warmer; negative makes it cooler before dithering.</div>
+          </div>
+          <div class="setting-card__value" id="auto-temp-value">0</div>
+        </div>
+        <input id="auto-temp-range" type="range" min="-20" max="20" step="1" value="0">
+      </div>
+    </section>
+
+    <section class="setting-group">
+      <h3 class="setting-group__title" data-i18n="settings.library">Library</h3>
+      <div class="setting-card setting-card--action setting-card--firmware">
+        <div class="setting-card__text">
+          <div class="setting-card__label" data-i18n="settings.photos">Photos on device</div>
+          <div class="setting-card__hint" data-i18n="settings.photosHint">Stored prints ready for playback.</div>
+        </div>
+        <div class="setting-card__value" id="set-count">0</div>
+      </div>
+      <div class="setting-card setting-card--action">
+        <div class="setting-card__text">
+          <div class="setting-card__label" data-i18n="settings.firmwareVersion">Firmware version</div>
+          <div class="setting-card__hint" id="firmware-build-time">—</div>
+        </div>
+        <div class="setting-card__value" id="firmware-version">—</div>
+      </div>
+    </section>
+
+    <section class="setting-group">
+      <h3 class="setting-group__title" data-i18n="settings.language">Language</h3>
+      <div class="setting-card">
+        <div class="setting-card__main">
+          <div class="setting-card__text">
+            <div class="setting-card__label" data-i18n="settings.language">Language</div>
+            <div class="setting-card__hint" data-i18n="settings.languageHint">Defaults to your phone browser language; manual changes are saved on this phone.</div>
+          </div>
+        </div>
+        <div class="language-toggle" role="group" aria-label="Language" data-i18n-aria="settings.language">
+          <button type="button" data-lang-option="en" data-i18n="settings.languageEnglish">English</button>
+          <button type="button" data-lang-option="zh" data-i18n="settings.languageChinese">中文</button>
+        </div>
+      </div>
+    </section>
   </div>
 </div>
 
-<!-- Calibration wizard — walks the user through each of 6 inks, asking them
-     to match an on-screen swatch to what the physical panel is showing. -->
+<!-- Calibration wizard — measures solid inks and mixed halftone patches.
+     Users enter colorimeter output directly; missing patches fall back to the
+     six measured ink colours plus the optical mixing model. -->
 <div id="sheet-calib" class="sheet">
   <div class="sheet__head">
-    <div class="sheet__title" id="calib-step-title">Calibration</div>
-    <button class="sheet__close" data-close="sheet-calib">Cancel</button>
+    <div class="sheet__title" id="calib-step-title" data-i18n="calib.title">Calibration</div>
+    <button class="sheet__close" data-close="sheet-calib" data-i18n="calib.cancel">Cancel</button>
   </div>
   <div class="sheet__body" id="calib-body">
     <div class="calib-progress" id="calib-progress"></div>
-    <p class="calib-instructions" id="calib-instructions">Tap "Show on panel" — the panel will refresh (~30 s).  Once it settles, drag the sliders below so the swatch matches what you see on the panel.</p>
+    <div class="calib-target-card">
+      <div>
+        <div class="calib-target-card__eyebrow" data-i18n="calib.currentPatch">Current patch</div>
+        <div class="calib-target-card__name" id="calib-target-name">Patch</div>
+      </div>
+      <div class="calib-target-card__kind" id="calib-target-kind">Required</div>
+    </div>
     <div class="calib-actions">
-      <button id="btn-calib-show">Show on panel</button>
+      <button id="btn-calib-show" data-i18n="action.showOnPanel">Show on frame</button>
       <span class="calib-actions__hint" id="calib-actions__hint"></span>
     </div>
     <div class="calib-swatch-big" id="calib-swatch-big"></div>
-    <div class="calib-sliders">
-      <label>Hue       <span id="calib-h-val">0°</span></label>
-      <input id="calib-h" type="range" min="0" max="360" step="1" value="0">
-      <label>Saturation<span id="calib-s-val">0%</span></label>
-      <input id="calib-s" type="range" min="0" max="100" step="1" value="0">
-      <label>Lightness <span id="calib-l-val">50%</span></label>
-      <input id="calib-l" type="range" min="0" max="100" step="1" value="50">
+    <div class="calib-measure-form">
+      <label for="calib-input-mode"><span data-i18n="calib.inputMode">Reading format</span> <span id="calib-required-label">Required</span></label>
+      <select id="calib-input-mode">
+        <option value="rgb" data-i18n="calib.rgbOption">RGB numbers</option>
+        <option value="cmyk" data-i18n="calib.cmykOption">CMYK percentages</option>
+      </select>
+      <input id="calib-reading" type="text" inputmode="decimal" placeholder="RGB, e.g. 151, 161, 160" data-i18n-placeholder="calib.readingPlaceholder">
+      <div class="calib-measure-actions">
+        <button id="btn-calib-use-reading" type="button" data-i18n="calib.applyReading">Save reading</button>
+        <button id="btn-calib-clear-reading" type="button" data-i18n="calib.clearReading">Keep estimate</button>
+      </div>
     </div>
-    <div class="calib-readout" id="calib-readout">rgb(0, 0, 0)</div>
+    <div class="calib-readout" id="calib-readout">fallback rgb(0, 0, 0)</div>
   </div>
   <div class="sheet__foot">
-    <button id="btn-calib-prev">Back</button>
-    <button id="btn-calib-skip">Skip</button>
-    <button id="btn-calib-next" class="is-primary">Next →</button>
+    <button id="btn-calib-prev" data-i18n="action.back">Back</button>
+    <button id="btn-calib-skip" data-i18n="action.skip">Skip patch</button>
+    <button id="btn-calib-next" class="is-primary" data-i18n="action.nextArrow">Next patch</button>
   </div>
 </div>
 
 <div id="toast" class="toast"></div>
 
+<script src="/i18n.js"></script>
 <script>
+function tr(key, vars) {
+  return (window.PaperI18n && PaperI18n.t) ? PaperI18n.t(key, vars) : key;
+}
+function applyI18n(root) {
+  if (window.PaperI18n && PaperI18n.apply) PaperI18n.apply(root || document);
+}
+function toastKey(key, vars) { toast(tr(key, vars)); }
+function updateDynamicI18n() {
+  if (typeof syncSettingsReadouts === 'function') syncSettingsReadouts();
+  if (typeof setPreviewMode === 'function') setPreviewMode(previewMode);
+  if (typeof renderWizardChrome === 'function' && typeof wizardWorking !== 'undefined' && wizardWorking) renderWizardChrome();
+}
+window.addEventListener('paper-i18n-change', updateDynamicI18n);
 // ---------- API ----------
 // Panel native resolution (TW × TH) and 1.5× supersample resolution
 // (SW × SH) used by the dither.  bakeCanvas renders into the 600×900
@@ -848,7 +1813,7 @@ const PALETTE_ORDER = ['black','white','yellow','red','blue','green'];
 const api = {
   async list()    { const r = await fetch('/api/list'); return r.json(); },
   async cfg()     { const r = await fetch('/api/config'); return r.json(); },
-  async setCfg(j) { return fetch('/api/config', {method:'POST', body: JSON.stringify(j)}); },
+  async setCfg(j) { return fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(j)}); },
   async calib()   { const r = await fetch('/api/calib'); return r.json(); },
   async setCalib(j) { return fetch('/api/calib', {method:'POST', body: JSON.stringify(j)}); },
   async del(name) { return fetch('/api/photo/' + encodeURIComponent(name), {method:'DELETE'}); },
@@ -875,8 +1840,11 @@ async function uploadStatusMessage(resp, label) {
 // we hand it the cropped/adjusted RGB888 buffer and read back 120 KB of
 // pre-packed 4-bit framebuffer.
 let wasm = null;
+let wasmLoading = null;
 async function loadWasm() {
   if (wasm) return wasm;
+  if (wasmLoading) return wasmLoading;
+  wasmLoading = (async () => {
   // cache: 'no-store' — the previous build shipped /dither.wasm with
   // Cache-Control: max-age=86400, so users on the old firmware have a stale
   // copy that lacks the new exports (e.g. wasm_dither_15x).  Forcing
@@ -922,11 +1890,19 @@ async function loadWasm() {
     setPalette: exports.wasm_set_palette_lab,
     dither:    exports.wasm_dither,
     dither15x: exports.wasm_dither_15x,
+    ditherE6:  exports.wasm_dither_e6,
+    ditherE6Mix15x: exports.wasm_dither_e6_15x,
     flatFill:  exports.wasm_flat_fill,
     flatFill15x: exports.wasm_flat_fill_15x,
   };
   wasm.init();
   return wasm;
+  })();
+  try {
+    return await wasmLoading;
+  } finally {
+    wasmLoading = null;
+  }
 }
 
 // Calibration cache (palette + default adjust).  Fetched on page load.
@@ -943,11 +1919,48 @@ const CALIB_FALLBACK = {
     blue:   {rgb:[ 60, 97,134]},
     green:  {rgb:[ 77,100, 76]},
   },
-  adjust: {brightness:0, exposure:0, contrast:106, saturation:106, vibrance:24, gamma:96, temperature:106, tint:99, smoothness:10, sharpen:34, vignette:14},
+  adjust: {brightness:0, exposure:0, contrast:106, saturation:136, vibrance:64, gamma:96, temperature:106, tint:99, smoothness:10, sharpen:34, vignette:14},
+  auto: {exposureBias:-33, temperatureBias:0},
+  pipeline: {ditherMode:'e6-mix'},
 };
+
+function normalizeDitherMode(mode) {
+  return mode === 'classic' ? 'classic' : 'e6-mix';
+}
+
+function ensurePipelineConfig(c) {
+  const out = c || {};
+  out.auto = out.auto || {};
+  if (!Number.isFinite(+out.auto.exposureBias)) out.auto.exposureBias = CALIB_FALLBACK.auto.exposureBias;
+  if (!Number.isFinite(+out.auto.temperatureBias)) out.auto.temperatureBias = CALIB_FALLBACK.auto.temperatureBias;
+  out.auto.exposureBias = Math.round(clampNum(+out.auto.exposureBias, -300, 300));
+  out.auto.temperatureBias = Math.round(clampNum(+out.auto.temperatureBias, -20, 20));
+  out.pipeline = out.pipeline || {};
+  out.pipeline.ditherMode = normalizeDitherMode(out.pipeline.ditherMode);
+  return out;
+}
+
+function migrateCalibAdjustDefaults(c) {
+  c.adjust = c.adjust || JSON.parse(JSON.stringify(CALIB_FALLBACK.adjust));
+  if (+c.adjust.saturation === 106 && (c.adjust.vibrance == null || +c.adjust.vibrance === 24)) {
+    c.adjust.saturation = CALIB_FALLBACK.adjust.saturation;
+    c.adjust.vibrance = CALIB_FALLBACK.adjust.vibrance;
+  }
+  return c;
+}
+
+function autoPipelineSettings() {
+  const c = ensurePipelineConfig(calib || JSON.parse(JSON.stringify(CALIB_FALLBACK)));
+  return c.auto;
+}
+
 async function loadCalib() {
   try { calib = await api.calib(); } catch (e) { calib = null; }
   if (!calib || !calib.palette || !calib.adjust) calib = JSON.parse(JSON.stringify(CALIB_FALLBACK));
+  calib = ensurePipelineConfig(calib);
+  calib = migrateCalibAdjustDefaults(calib);
+  calib = ensureMixtureCalib(calib);
+  ditherMode = normalizeDitherMode(calib.pipeline && calib.pipeline.ditherMode);
   // Strip any stored `lab` — derived from `rgb` exclusively from now on.
   for (const name of PALETTE_ORDER) {
     if (calib.palette[name] && calib.palette[name].lab) delete calib.palette[name].lab;
@@ -995,6 +2008,7 @@ const gridEl = document.getElementById('grid');
 const emptyEl = document.getElementById('empty');
 const countEl = document.getElementById('count');
 const setCountEl = document.getElementById('set-count');
+const nextBtn = document.getElementById('btn-next');
 let state = { photos: [], active: null };
 
 async function refresh() {
@@ -1004,6 +2018,7 @@ async function refresh() {
     state.active = r.active || null;
     countEl.textContent = state.photos.length;
     setCountEl.textContent = state.photos.length;
+    if (nextBtn) nextBtn.disabled = state.photos.length === 0;
     gridEl.innerHTML = '';
     if (state.photos.length === 0) {
       emptyEl.hidden = false;
@@ -1012,18 +2027,26 @@ async function refresh() {
       for (const p of state.photos) {
         const tile = document.createElement('div');
         tile.className = 'tile' + (p.name === state.active ? ' is-active' : '');
+        tile.style.setProperty('--tilt', photoTilt(p.name));
+        tile.tabIndex = 0;
+        tile.setAttribute('role', 'button');
+        tile.setAttribute('aria-label', tr('detail.photo'));
         tile.innerHTML = `
-          <img src="/api/photo/${encodeURIComponent(p.name)}" loading="lazy" alt="">
-          <div class="tile__caption">
-            <span>${shortName(p.name)}</span>
-            <span>${formatBytes(p.size)}</span>
+          <div class="tile__photo">
+            <img src="${photoUrl(p)}" loading="eager" decoding="async" alt="">
+            <div class="tile__shine"></div>
           </div>`;
         tile.onclick = () => openDetail(p);
+        tile.onkeydown = e => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(p); }
+        };
+        tile.onpointerdown = () => tile.classList.add('is-pressing');
+        tile.onpointerup = tile.onpointercancel = tile.onpointerleave = () => tile.classList.remove('is-pressing');
         gridEl.appendChild(tile);
       }
     }
   } catch (e) {
-    toast('Refresh failed');
+    toastKey('toast.refreshFailed');
     console.error(e);
   }
 }
@@ -1031,10 +2054,29 @@ async function refresh() {
 function shortName(n) {
   return n.length > 12 ? n.slice(0,9) + '…' : n;
 }
+function photoTilt(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+  return (((Math.abs(h) % 56) - 28) / 10).toFixed(1) + 'deg';
+}
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+}
 function formatBytes(b) {
   if (b < 1024) return b + 'B';
   if (b < 1024*1024) return Math.round(b/1024) + 'K';
   return (b/1024/1024).toFixed(1) + 'M';
+}
+function photoUrl(photo, opts = {}) {
+  const name = (typeof photo === 'string') ? photo : photo.name;
+  let url = '/api/photo/' + encodeURIComponent(name);
+  const version = (photo && typeof photo === 'object')
+    ? `${photo.mtime || 0}-${photo.size || 0}`
+    : '';
+  if (version || opts.noCache) {
+    url += '?v=' + encodeURIComponent(version || Date.now());
+  }
+  return url;
 }
 
 // ---------- detail sheet ----------
@@ -1045,8 +2087,8 @@ let detailTarget = null;
 
 function openDetail(p) {
   detailTarget = p;
-  detailName.textContent = p.name;
-  detailImg.src = '/api/photo/' + encodeURIComponent(p.name);
+  detailName.textContent = tr('detail.photo');
+  detailImg.src = photoUrl(p);
   detailSheet.classList.add('is-open');
 }
 document.getElementById('btn-delete').onclick = async () => {
@@ -1055,19 +2097,25 @@ document.getElementById('btn-delete').onclick = async () => {
     const r = await api.del(detailTarget.name);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     detailSheet.classList.remove('is-open');
-    toast('Deleted');
+    toastKey('toast.deleted');
     refresh();
   } catch (e) {
-    toast('Delete failed');
+    toastKey('toast.deleteFailed');
     console.error(e);
   }
 };
 document.getElementById('btn-show').onclick = async () => {
   if (!detailTarget) return;
-  await api.show(detailTarget.name);
-  toast('Refreshing display…');
-  detailSheet.classList.remove('is-open');
-  setTimeout(refresh, 1500);
+  try {
+    const r = await api.show(detailTarget.name);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    toastKey('toast.refreshingDisplay');
+    detailSheet.classList.remove('is-open');
+    setTimeout(refresh, 1500);
+  } catch (e) {
+    toastKey('toast.showFailed');
+    console.error(e);
+  }
 };
 
 // Tune: load the existing JPG into the upload sheet so the user can re-crop,
@@ -1079,7 +2127,7 @@ document.getElementById('btn-show').onclick = async () => {
 document.getElementById('btn-tune').onclick = async () => {
   if (!detailTarget) return;
   try {
-    const resp = await fetch('/api/photo/' + encodeURIComponent(detailTarget.name));
+    const resp = await fetch(photoUrl(detailTarget, {noCache: true}), {cache: 'no-store'});
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const blob = await resp.blob();
     const bmp  = await createImageBitmap(blob);
@@ -1104,6 +2152,7 @@ document.getElementById('btn-tune').onclick = async () => {
         if (sidecar && sidecar.adjust) {
           Object.assign(perImageAdjust, sidecar.adjust);
           outputMode = sidecar.mode || 'dither';
+          ditherMode = normalizeDitherMode(sidecar.ditherMode || ditherMode);
           preserveAdjust = true;
           console.log('Tune: loaded sidecar adjust', sidecar.adjust);
         }
@@ -1115,7 +2164,7 @@ document.getElementById('btn-tune').onclick = async () => {
     detailSheet.classList.remove('is-open');
     openUpload(bmp, {preserveAdjust});
   } catch (e) {
-    toast('Cannot load photo');
+    toastKey('toast.cannotLoadPhoto');
     console.error(e);
   }
 };
@@ -1132,10 +2181,17 @@ document.querySelectorAll('[data-close]').forEach(b => {
   };
 });
 
+const allSheets = Array.from(document.querySelectorAll('.sheet'));
+function syncSheetLock() {
+  document.body.classList.toggle('sheet-open', allSheets.some(s => s.classList.contains('is-open')));
+}
+allSheets.forEach(sheet => new MutationObserver(syncSheetLock).observe(sheet, {attributes:true, attributeFilter:['class']}));
+syncSheetLock();
+
 // ---------- Next ----------
 document.getElementById('btn-next').onclick = async () => {
   await api.next();
-  toast('Next photo');
+  toastKey('toast.nextPhoto');
   setTimeout(refresh, 1500);
 };
 
@@ -1143,49 +2199,236 @@ document.getElementById('btn-next').onclick = async () => {
 const settingsSheet = document.getElementById('sheet-settings');
 const loopRange = document.getElementById('loop-range');
 const loopValue = document.getElementById('loop-value');
+const wifiSleepRange = document.getElementById('wifi-sleep-range');
+const wifiSleepValue = document.getElementById('wifi-sleep-value');
+const wifiSsidValue = document.getElementById('wifi-ssid-value');
+const wifiPasswordValue = document.getElementById('wifi-password-value');
+const wifiPasswordInput = document.getElementById('wifi-password-input');
+const saveWifiPasswordBtn = document.getElementById('btn-save-wifi-password');
+const buttonSleepRange = document.getElementById('button-sleep-range');
+const buttonSleepValue = document.getElementById('button-sleep-value');
+const ledBrightnessRange = document.getElementById('led-brightness-range');
+const ledBrightnessValue = document.getElementById('led-brightness-value');
+const ditherModeSelect = document.getElementById('dither-mode-select');
+const autoAeRange = document.getElementById('auto-ae-range');
+const autoAeValue = document.getElementById('auto-ae-value');
+const autoTempRange = document.getElementById('auto-temp-range');
+const autoTempValue = document.getElementById('auto-temp-value');
+const firmwareVersionEl = document.getElementById('firmware-version');
+const firmwareBuildTimeEl = document.getElementById('firmware-build-time');
+let wifiSsidText = 'PaperColor';
+let wifiPasswordSet = false;
+let firmwareVersionText = 'PaperColor Prints';
+let firmwareBuildTimeText = '';
 
 function fmtInterval(s) {
-  if (s < 60) return s + ' s';
-  if (s < 3600) return (s/60).toFixed(s%60===0?0:1) + ' min';
-  return (s/3600).toFixed(s%3600===0?0:1) + ' h';
+  s = Math.round(+s || 0);
+  if (s < 60) return tr('time.seconds', {value: s});
+  if (s < 3600) return tr('time.minutes', {value: (s / 60).toFixed(s % 60 === 0 ? 0 : 1)});
+  return tr('time.hours', {value: (s / 3600).toFixed(s % 3600 === 0 ? 0 : 1)});
 }
-loopRange.oninput = () => loopValue.textContent = fmtInterval(+loopRange.value);
-loopRange.onchange = () => api.setCfg({loop_interval_s: +loopRange.value});
+function fmtBrightness(v) {
+  return (+v === 0) ? tr('settings.off') : String(v);
+}
+function fmtEvBias(v) {
+  v = Math.round(+v || 0);
+  if (v === 0) return '0 EV';
+  const sign = v > 0 ? '+' : '-';
+  const a = Math.abs(v);
+  if (a % 100 === 0) return sign + (a / 100) + ' EV';
+  if (a === 33) return sign + '1/3 EV';
+  if (a === 67) return sign + '2/3 EV';
+  return sign + (a / 100).toFixed(2) + ' EV';
+}
+function fmtSigned(v) {
+  v = Math.round(+v || 0);
+  return v > 0 ? '+' + v : String(v);
+}
+function applyConfigToControls(cfg) {
+  if (!cfg || typeof cfg !== 'object') return;
+  if (loopRange && Number.isFinite(+cfg.loop_interval_s)) loopRange.value = cfg.loop_interval_s;
+  if (wifiSleepRange && Number.isFinite(+cfg.wifi_idle_sleep_s)) wifiSleepRange.value = cfg.wifi_idle_sleep_s;
+  if (buttonSleepRange && Number.isFinite(+cfg.button_sleep_s)) buttonSleepRange.value = cfg.button_sleep_s;
+  if (ledBrightnessRange && Number.isFinite(+cfg.status_led_brightness)) ledBrightnessRange.value = cfg.status_led_brightness;
+  if ('wifi_ap_ssid' in cfg) wifiSsidText = cfg.wifi_ap_ssid || 'PaperColor';
+  if ('wifi_ap_password_set' in cfg) wifiPasswordSet = !!cfg.wifi_ap_password_set;
+  if ('fw_version' in cfg) firmwareVersionText = cfg.fw_version || 'PaperColor Prints';
+  if ('build_time' in cfg) firmwareBuildTimeText = cfg.build_time || '';
+}
+function syncSettingsReadouts(cfg) {
+  applyConfigToControls(cfg);
+  if (loopValue && loopRange) loopValue.textContent = fmtInterval(+loopRange.value);
+  if (wifiSleepValue && wifiSleepRange) wifiSleepValue.textContent = fmtInterval(+wifiSleepRange.value);
+  if (buttonSleepValue && buttonSleepRange) buttonSleepValue.textContent = fmtInterval(+buttonSleepRange.value);
+  if (ledBrightnessValue && ledBrightnessRange) ledBrightnessValue.textContent = fmtBrightness(+ledBrightnessRange.value);
+  if (wifiSsidValue) wifiSsidValue.textContent = wifiSsidText;
+  if (wifiPasswordValue) wifiPasswordValue.textContent = wifiPasswordSet ? tr('settings.wifiProtected') : tr('settings.wifiOpen');
+  if (wifiPasswordInput) {
+    wifiPasswordInput.placeholder = wifiPasswordSet
+      ? tr('settings.wifiPasswordChangePlaceholder')
+      : tr('settings.wifiPasswordPlaceholder');
+  }
+  if (autoAeValue && autoAeRange) autoAeValue.textContent = fmtEvBias(+autoAeRange.value);
+  if (autoTempValue && autoTempRange) autoTempValue.textContent = fmtSigned(+autoTempRange.value);
+  if (firmwareVersionEl) firmwareVersionEl.textContent = firmwareVersionText;
+  if (firmwareBuildTimeEl) firmwareBuildTimeEl.textContent = firmwareBuildTimeText ? tr('settings.buildTime', {time: firmwareBuildTimeText}) : '';
+}
+async function saveConfigSetting(patch) {
+  try {
+    const r = await api.setCfg(patch);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const cfg = await r.json();
+    syncSettingsReadouts(cfg);
+    return true;
+  } catch (e) {
+    toastKey('toast.saveFailed');
+    console.warn('setting save failed', e);
+    syncSettingsReadouts();
+    return false;
+  }
+}
+loopRange.oninput = () => syncSettingsReadouts();
+loopRange.onchange = () => saveConfigSetting({loop_interval_s: +loopRange.value});
+wifiSleepRange.oninput = () => syncSettingsReadouts();
+wifiSleepRange.onchange = () => saveConfigSetting({wifi_idle_sleep_s: +wifiSleepRange.value});
+buttonSleepRange.oninput = () => syncSettingsReadouts();
+buttonSleepRange.onchange = () => saveConfigSetting({button_sleep_s: +buttonSleepRange.value});
+ledBrightnessRange.oninput = () => syncSettingsReadouts();
+ledBrightnessRange.onchange = () => saveConfigSetting({status_led_brightness: +ledBrightnessRange.value});
+function validWifiPasswordInput(value) {
+  return value.length === 0 || (/^[\x20-\x7e]{8,63}$/.test(value));
+}
+async function saveWifiPassword() {
+  if (!wifiPasswordInput) return;
+  const password = wifiPasswordInput.value;
+  if (!validWifiPasswordInput(password)) {
+    toastKey('toast.wifiPasswordInvalid');
+    return;
+  }
+  const ok = await saveConfigSetting({wifi_ap_password: password});
+  if (!ok) return;
+  wifiPasswordSet = password.length > 0;
+  wifiPasswordInput.value = '';
+  syncSettingsReadouts();
+  toastKey(wifiPasswordSet ? 'toast.wifiPasswordSaved' : 'toast.wifiPasswordCleared');
+}
+if (saveWifiPasswordBtn) saveWifiPasswordBtn.onclick = saveWifiPassword;
+if (wifiPasswordInput) {
+  wifiPasswordInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveWifiPassword();
+    }
+  });
+}
+
+function syncPipelineSettingControls() {
+  if (!calib) return;
+  calib = ensurePipelineConfig(calib);
+  if (ditherModeSelect) ditherModeSelect.value = normalizeDitherMode(calib.pipeline.ditherMode);
+  if (autoAeRange) autoAeRange.value = calib.auto.exposureBias;
+  if (autoTempRange) autoTempRange.value = calib.auto.temperatureBias;
+  syncSettingsReadouts();
+}
+
+async function savePipelineSettings() {
+  if (!calib) await loadCalib();
+  calib = ensurePipelineConfig(calib);
+  if (ditherModeSelect) {
+    ditherMode = normalizeDitherMode(ditherModeSelect.value);
+    calib.pipeline.ditherMode = ditherMode;
+  }
+  if (autoAeRange) calib.auto.exposureBias = Math.round(+autoAeRange.value);
+  if (autoTempRange) calib.auto.temperatureBias = Math.round(+autoTempRange.value);
+  syncSettingsReadouts();
+  try {
+    const r = await api.setCalib(calib);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    schedulePreviewUpdate();
+  } catch (e) {
+    toastKey('toast.saveFailed');
+    console.warn('pipeline setting save failed', e);
+  }
+}
+
+if (ditherModeSelect) ditherModeSelect.onchange = savePipelineSettings;
+if (autoAeRange) {
+  autoAeRange.oninput = () => syncSettingsReadouts();
+  autoAeRange.onchange = savePipelineSettings;
+}
+if (autoTempRange) {
+  autoTempRange.oninput = () => syncSettingsReadouts();
+  autoTempRange.onchange = savePipelineSettings;
+}
 
 document.getElementById('btn-settings').onclick = async () => {
   try {
     const cfg = await api.cfg();
-    loopRange.value = cfg.loop_interval_s || 600;
-    loopValue.textContent = fmtInterval(+loopRange.value);
+    syncSettingsReadouts(cfg);
   } catch (e) { /* offline OK */ }
+  try {
+    if (!calib) await loadCalib();
+    syncPipelineSettingControls();
+  } catch (e) { /* calibration optional while offline */ }
   settingsSheet.classList.add('is-open');
 };
 
 // ---------- Upload / crop ----------
 const filePicker = document.getElementById('file-picker');
+const uploadBtn = document.getElementById('btn-upload');
 const uploadSheet = document.getElementById('sheet-upload');
 const stageEl = document.getElementById('stage');
 const stageCanvas = document.getElementById('stage-canvas');
 const stageMask = document.getElementById('stage-mask');
 
+function openFilePicker() { filePicker.click(); }
+if (uploadBtn) uploadBtn.addEventListener('click', openFilePicker);
+emptyEl.onclick = openFilePicker;
+emptyEl.onkeydown = e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFilePicker(); }
+};
+filePicker.onchange = async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try {
+    const bmp = await createImageBitmap(f);
+    openUpload(bmp);
+  } catch (err) {
+    toastKey('toast.cannotReadImage');
+    console.error(err);
+  }
+  filePicker.value = '';
+};
 
 // ---------- adjustment presets ----------
 const BUILTIN_PRESETS = {
-  balanced: {label:'Balanced', values:{brightness:0, exposure:0, contrast:106, saturation:106, vibrance:24, gamma:96, temperature:106, tint:99, smoothness:10, sharpen:34, vignette:14}},
-  landscape:{label:'Landscape', values:{brightness:0, exposure:4, contrast:112, saturation:112, vibrance:34, gamma:94, temperature:104, tint:100, smoothness:8, sharpen:42, vignette:18}},
-  portrait: {label:'Portrait', values:{brightness:2, exposure:3, contrast:102, saturation:101, vibrance:18, gamma:98, temperature:110, tint:100, smoothness:14, sharpen:24, vignette:10}},
-  anime:    {label:'Anime', values:{brightness:0, exposure:2, contrast:116, saturation:118, vibrance:12, gamma:92, temperature:104, tint:100, smoothness:4, sharpen:50, vignette:0}},
-  document: {label:'Document', values:{brightness:4, exposure:6, contrast:126, saturation:80, vibrance:-20, gamma:90, temperature:100, tint:100, smoothness:2, sharpen:62, vignette:22}},
-  russian:  {label:'Russian', mode:'flat-russian', values:{brightness:1, exposure:3, contrast:123, saturation:88, vibrance:-6, gamma:91, temperature:104, tint:98, smoothness:100, sharpen:58, vignette:10}},
+  balanced: {label:'Balanced', values:{brightness:0, exposure:0, contrast:106, saturation:136, vibrance:64, gamma:96, temperature:106, tint:99, smoothness:10, sharpen:34, vignette:14}},
+  landscape:{label:'Landscape', values:{brightness:0, exposure:4, contrast:112, saturation:142, vibrance:74, gamma:94, temperature:104, tint:100, smoothness:8, sharpen:42, vignette:18}},
+  portrait: {label:'Portrait', values:{brightness:2, exposure:3, contrast:102, saturation:131, vibrance:58, gamma:98, temperature:110, tint:100, smoothness:14, sharpen:24, vignette:10}},
+  anime:    {label:'Anime', values:{brightness:0, exposure:2, contrast:116, saturation:148, vibrance:52, gamma:92, temperature:104, tint:100, smoothness:4, sharpen:50, vignette:0}},
+  document: {label:'Document', values:{brightness:4, exposure:6, contrast:126, saturation:110, vibrance:20, gamma:90, temperature:100, tint:100, smoothness:2, sharpen:62, vignette:22}},
+  russian:  {label:'Russian', mode:'flat-russian', values:{brightness:1, exposure:3, contrast:123, saturation:118, vibrance:34, gamma:91, temperature:104, tint:98, smoothness:100, sharpen:58, vignette:10}},
 };
 let customPresets = {};
 let outputMode = 'dither';
+let ditherMode = 'e6-mix';
+const CUSTOM_PRESETS_KEY = 'paperColorCustomPresets';
+const LEGACY_CUSTOM_PRESETS_KEY = 'paperE6CustomPresets';
 function loadCustomPresets() {
-  try { customPresets = JSON.parse(localStorage.getItem('paperE6CustomPresets') || '{}') || {}; }
-  catch { customPresets = {}; }
+  try {
+    const raw = localStorage.getItem(CUSTOM_PRESETS_KEY)
+      || localStorage.getItem(LEGACY_CUSTOM_PRESETS_KEY)
+      || '{}';
+    customPresets = JSON.parse(raw) || {};
+    if (!localStorage.getItem(CUSTOM_PRESETS_KEY)) {
+      localStorage.setItem(CUSTOM_PRESETS_KEY, JSON.stringify(customPresets));
+    }
+  } catch {
+    customPresets = {};
+  }
 }
 function saveCustomPresets() {
-  localStorage.setItem('paperE6CustomPresets', JSON.stringify(customPresets));
+  localStorage.setItem(CUSTOM_PRESETS_KEY, JSON.stringify(customPresets));
 }
 function allPresets() { return {...BUILTIN_PRESETS, ...customPresets}; }
 function renderPresetSelect() {
@@ -1216,11 +2459,49 @@ function applySelectedPreset() {
   const p = sel && allPresets()[sel.value];
   if (!p) return;
   outputMode = p.mode || 'dither';
+  if (p.ditherMode) ditherMode = normalizeDitherMode(p.ditherMode);
   applyAdjustValues(p.values);
 }
 
+const ADJUST_LIMITS = {
+  brightness: [-100, 100],
+  exposure: [-300, 300],
+  contrast: [0, 200],
+  saturation: [0, 200],
+  vibrance: [-100, 100],
+  gamma: [20, 300],
+  temperature: [50, 150],
+  tint: [50, 150],
+  smoothness: [0, 100],
+  sharpen: [0, 100],
+  vignette: [-100, 100],
+};
+
+function clampNum(v, lo, hi) {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+function clampAdjustValues(values) {
+  const out = {...values};
+  for (const [key, range] of Object.entries(ADJUST_LIMITS)) {
+    if (out[key] == null) continue;
+    out[key] = Math.round(clampNum(out[key], range[0], range[1]));
+  }
+  return out;
+}
+
+function percentileFromHist(hist, n, q) {
+  const target = Math.max(0, Math.min(n - 1, Math.round((n - 1) * q)));
+  let acc = 0;
+  for (let i = 0; i < hist.length; i++) {
+    acc += hist[i];
+    if (acc > target) return i;
+  }
+  return hist.length - 1;
+}
+
 function analyzeCanvasForAuto(canvas) {
-  const w = 96, h = 144;
+  const w = 120, h = 180;
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   const ctx = c.getContext('2d');
@@ -1229,23 +2510,37 @@ function analyzeCanvasForAuto(canvas) {
   ctx.drawImage(canvas, 0, 0, w, h);
   const data = ctx.getImageData(0, 0, w, h).data;
 
-  let sumY=0, sumY2=0, edge=0, chroma=0, warm=0, cool=0, blue=0, green=0, bright=0, dark=0;
+  let sumY=0, sumY2=0, edge=0, chroma=0, satSum=0;
+  let warm=0, cool=0, blue=0, green=0, red=0, skin=0, flat=0;
+  let bright=0, dark=0, clipHi=0, clipLo=0;
+  let sumR=0, sumG=0, sumB=0;
   let centerY=0, cornerY=0, centerN=0, cornerN=0;
-  const ys = new Float32Array(w*h);
+  const hist = new Uint32Array(256);
+  const ys = new Uint8Array(w*h);
   for (let y = 0, i = 0; y < h; y++) {
     for (let x = 0; x < w; x++, i++) {
       const j = i*4, r=data[j], g=data[j+1], b=data[j+2];
       const yy = 0.299*r + 0.587*g + 0.114*b;
-      ys[i] = yy;
+      const yi = Math.max(0, Math.min(255, Math.round(yy)));
+      ys[i] = yi;
+      hist[yi]++;
       sumY += yy; sumY2 += yy*yy;
+      sumR += r; sumG += g; sumB += b;
       const maxc = Math.max(r,g,b), minc = Math.min(r,g,b);
-      const ch = maxc - minc; chroma += ch;
+      const ch = maxc - minc;
+      const sat = maxc > 0 ? ch / maxc : 0;
+      chroma += ch; satSum += sat;
       if (yy > 190) bright++;
       if (yy < 55) dark++;
+      if (yy > 242) clipHi++;
+      if (yy < 14) clipLo++;
+      if (ch < 18) flat++;
       if (r > 78 && g > 44 && r >= g && g >= b - 8 && r - b > 18 && ch > 20) warm++;
+      if (r > 92 && g > 58 && b > 38 && r > b + 16 && r >= g - 6 && g >= b - 4 && yy > 60 && yy < 205) skin++;
       if (b > 72 && b >= r + 10 && b >= g - 4 && yy > 72 && ch > 16) cool++;
-      if (b > r + 18 && b > g + 8) blue++;
-      if (g > r + 10 && g >= b - 4) green++;
+      if (b > r + 18 && b > g + 8 && ch > 20) blue++;
+      if (g > r + 10 && g >= b - 4 && ch > 18) green++;
+      if (r > g + 18 && r > b + 12 && ch > 20) red++;
       const nx = (x + 0.5) / w * 2 - 1, ny = (y + 0.5) / h * 2 - 1;
       const rr = nx*nx + ny*ny;
       if (rr < 0.35) { centerY += yy; centerN++; }
@@ -1261,59 +2556,297 @@ function analyzeCanvasForAuto(canvas) {
   const n = w*h;
   const mean = sumY/n;
   const std = Math.sqrt(Math.max(0, sumY2/n - mean*mean));
+  const p02 = percentileFromHist(hist, n, 0.02);
+  const p10 = percentileFromHist(hist, n, 0.10);
+  const p25 = percentileFromHist(hist, n, 0.25);
+  const p50 = percentileFromHist(hist, n, 0.50);
+  const p75 = percentileFromHist(hist, n, 0.75);
+  const p90 = percentileFromHist(hist, n, 0.90);
+  const p98 = percentileFromHist(hist, n, 0.98);
+  const edgeAvg = edge / ((w-2)*(h-2));
   return {
-    mean, std, edge: edge / ((w-2)*(h-2)), chroma: chroma/n,
-    warm: warm/n, cool: cool/n, blue: blue/n, green: green/n, bright: bright/n, dark: dark/n,
+    mean, std, edge: edgeAvg, chroma: chroma/n, saturation: satSum/n,
+    p02, p10, p25, p50, p75, p90, p98,
+    warm: warm/n, cool: cool/n, blue: blue/n, green: green/n, red: red/n, skin: skin/n, flat: flat/n,
+    bright: bright/n, dark: dark/n, clipHi: clipHi/n, clipLo: clipLo/n,
+    rMean: sumR/n, gMean: sumG/n, bMean: sumB/n,
+    spread: p90 - p10,
     vignetteDelta: (centerY/Math.max(1,centerN)) - (cornerY/Math.max(1,cornerN))
   };
 }
 
+function buildAutoScene(stats) {
+  const highKeyMono = stats.chroma < 28 && stats.std > 48 && (stats.bright + stats.dark) > 0.42;
+  let key = 'balanced';
+  if ((stats.edge > 44 && highKeyMono) || (stats.edge > 58 && stats.chroma < 36 && stats.std > 38)) key = 'document';
+  else if (stats.edge > 38 && stats.chroma > 38 && stats.flat > 0.30 && stats.std > 34) key = 'anime';
+  else if ((stats.skin > 0.075 || stats.warm > 0.18) && stats.mean > 68 && stats.mean < 192) key = 'portrait';
+  else if ((stats.blue + stats.green + stats.cool) > 0.30 || stats.chroma > 50 || stats.saturation > 0.34) key = 'landscape';
+
+  return {
+    key,
+    highKeyMono,
+    lowKey: stats.dark > 0.24 && stats.p25 < 48,
+    neutralish: stats.chroma < 34 && stats.saturation < 0.22,
+    detailed: stats.edge > 46,
+    flatClean: stats.flat > 0.42 || stats.bright > 0.34,
+  };
+}
+
 function chooseAutoPreset(stats) {
-  if (stats.edge > 46 && stats.chroma < 34 && stats.std > 42) return 'document';
-  if (stats.edge > 36 && stats.chroma > 42 && stats.bright > 0.18) return 'anime';
-  if (stats.warm > 0.16 && stats.mean > 72 && stats.mean < 185) return 'portrait';
-  if ((stats.blue + stats.green + stats.cool) > 0.32 || stats.chroma > 48) return 'landscape';
-  return 'balanced';
+  return buildAutoScene(stats).key;
+}
+
+function autoIspExposureTone(base, scene, stats, autoCfg) {
+  const key = scene.key;
+  // AE + tone mapping: percentile-based instead of mean-only. This preserves
+  // low-key/high-key intent while landing the median in the Spectra 6 range.
+  const mid = stats.p50 * 0.68 + stats.mean * 0.32;
+  const targetMid = key === 'document' ? 170
+                  : key === 'portrait' ? 150
+                  : key === 'anime' ? 150
+                  : key === 'landscape' ? 144
+                  : 142;
+  base.exposure = Math.round(Math.log2(targetMid / Math.max(28, mid)) * 100);
+  if (stats.clipHi > 0.08 || stats.p98 > 248) base.exposure -= 5;
+  if (scene.lowKey && key !== 'document') base.exposure += 4;
+  base.exposure += autoCfg.exposureBias;
+  base.exposure = clampNum(base.exposure, -300, 300);
+
+  const spreadBoost = Math.round((118 - stats.spread) * 0.15);
+  base.contrast += clampNum(spreadBoost, -10, 14);
+  if (key === 'document') base.contrast += 6;
+  if (key === 'portrait') base.contrast -= 3;
+  base.gamma += clampNum(Math.round((106 - stats.p50) * 0.08), -7, 9);
+  if (stats.dark > 0.22) base.gamma += 3;
+  if (stats.bright > 0.40) base.gamma -= 2;
+}
+
+function autoIspColor(base, scene, stats, autoCfg) {
+  const key = scene.key;
+  // AWB/color matrix analogue. Only grey-world-correct mostly neutral crops;
+  // forests, sky, posters, and product colours are protected.
+  if (stats.chroma < 30) { base.vibrance += 12; base.saturation += 3; }
+  if (stats.chroma > 62 || stats.saturation > 0.42) { base.vibrance -= 10; base.saturation -= 4; }
+  if (key === 'portrait') { base.saturation -= 3; base.vibrance -= 2; }
+  if (scene.neutralish) {
+    const rbCast = stats.rMean - stats.bMean;
+    const gCast = stats.gMean - (stats.rMean + stats.bMean) * 0.5;
+    base.temperature += Math.round(clampNum(-rbCast * 0.055, -5, 5));
+    base.tint += Math.round(clampNum(gCast * 0.060, -5, 5));
+  }
+  if (stats.green > stats.red * 1.4 && stats.green > 0.10) {
+    base.temperature -= 2;
+    base.tint -= 1;
+  }
+  base.temperature += autoCfg.temperatureBias;
+}
+
+function autoIspDetailNoise(base, scene, stats) {
+  const key = scene.key;
+  // Denoise/detail stage: smoothness is the paper-ISP noise reducer, while
+  // sharpen is the edge/detail boost before quantisation.
+  base.smoothness += Math.round(stats.flat * 12 + stats.bright * 9 - stats.edge * 0.10);
+  if (key === 'document' || key === 'anime') base.smoothness -= 5;
+  if (key === 'portrait') base.smoothness += 5;
+
+  base.vignette = Math.round(clampNum(stats.vignetteDelta * 0.58, -18, 42));
+
+  base.sharpen += Math.round(clampNum((30 - stats.edge) * 0.34, -8, 10));
+  if (stats.std < 30) base.sharpen += 5;
+  if (key === 'portrait' || stats.skin > 0.10) base.sharpen -= 6;
+  if (key === 'document') base.sharpen += 6;
 }
 
 function buildAutoAdjust(stats) {
-  const key = chooseAutoPreset(stats);
+  const scene = buildAutoScene(stats);
+  const key = scene.key;
   const base = {...BUILTIN_PRESETS[key].values};
+  const autoCfg = autoPipelineSettings();
 
-  // Exposure: put mean luma near EINK-friendly mid-high target (~142), but
-  // avoid large jumps that would crush shadows/highlights before dithering.
-  const target = key === 'document' ? 166 : (key === 'portrait' ? 148 : 142);
-  base.exposure = Math.max(-28, Math.min(28, Math.round(Math.log2(target / Math.max(32, stats.mean)) * 100)));
+  autoIspExposureTone(base, scene, stats, autoCfg);
+  autoIspColor(base, scene, stats, autoCfg);
+  autoIspDetailNoise(base, scene, stats);
 
-  // Contrast and gamma respond to measured image contrast.
-  if (stats.std < 34) { base.contrast += 5; base.gamma -= 2; }
-  if (stats.std > 62) { base.contrast -= 4; base.gamma += 2; }
-
-  // Vignette fix compensates darker corners; clamp so it does not flatten the
-  // intentional composition of already-good images.
-  base.vignette = Math.max(0, Math.min(34, Math.round(stats.vignetteDelta * 0.55)));
-
-  // Sharpen more for low edge density, less for portraits to avoid harsh skin.
-  if (stats.edge < 22) base.sharpen += 8;
-  if (key === 'portrait') base.sharpen -= 4;
-
-  // Natural colour boost: low chroma gets vibrance, high chroma backs off.
-  if (stats.chroma < 28) base.vibrance += 10;
-  if (stats.chroma > 60) base.vibrance -= 8;
-
-  for (const k of Object.keys(base)) base[k] = Math.round(base[k]);
-  return {key, values: base, stats};
+  return {key, values: clampAdjustValues(base), stats, scene};
 }
 
-function applyAutoAdjust() {
+function autoCandidateKey(values) {
+  return Object.keys(ADJUST_LIMITS).map(k => values[k]).join(',');
+}
+
+function makeAutoCandidates(seed) {
+  const out = [];
+  const seen = new Set();
+  const add = patch => {
+    const values = clampAdjustValues({...seed.values, ...patch});
+    const id = autoCandidateKey(values);
+    if (!seen.has(id)) { seen.add(id); out.push(values); }
+  };
+
+  add({});
+  add({exposure: seed.values.exposure + 6, gamma: seed.values.gamma + 3});
+  add({exposure: seed.values.exposure - 6, gamma: seed.values.gamma - 3});
+  add({contrast: seed.values.contrast + 8, sharpen: seed.values.sharpen + 5, smoothness: seed.values.smoothness - 3});
+  add({contrast: seed.values.contrast - 7, smoothness: seed.values.smoothness + 8});
+  add({saturation: seed.values.saturation + 8, vibrance: seed.values.vibrance + 10});
+  add({saturation: seed.values.saturation - 8, vibrance: seed.values.vibrance - 10, smoothness: seed.values.smoothness + 5});
+  add({exposure: seed.values.exposure + 3, contrast: seed.values.contrast + 5, gamma: seed.values.gamma - 2});
+  add({exposure: seed.values.exposure - 3, contrast: seed.values.contrast - 4, gamma: seed.values.gamma + 4, smoothness: seed.values.smoothness + 4});
+
+  if (seed.key === 'portrait') {
+    add({temperature: seed.values.temperature + 3, smoothness: seed.values.smoothness + 6, sharpen: seed.values.sharpen - 7});
+    add({saturation: seed.values.saturation - 6, vibrance: seed.values.vibrance - 5});
+  } else if (seed.key === 'landscape') {
+    add({saturation: seed.values.saturation + 6, vibrance: seed.values.vibrance + 8, contrast: seed.values.contrast + 4});
+    add({temperature: seed.values.temperature - 3, tint: seed.values.tint - 2});
+  } else if (seed.key === 'document') {
+    add({exposure: seed.values.exposure + 5, contrast: seed.values.contrast + 10, saturation: seed.values.saturation - 10, smoothness: 1});
+    add({exposure: seed.values.exposure - 4, gamma: seed.values.gamma + 5, smoothness: 8});
+  } else if (seed.key === 'anime') {
+    add({contrast: seed.values.contrast + 8, saturation: seed.values.saturation + 6, smoothness: Math.max(0, seed.values.smoothness - 4)});
+    add({smoothness: seed.values.smoothness + 10, sharpen: seed.values.sharpen - 4});
+  }
+  return out.slice(0, 14);
+}
+
+function paletteLumaTable() {
+  return PALETTE_ORDER.map(name => {
+    const c = (calib && calib.palette && calib.palette[name]) || CALIB_FALLBACK.palette[name];
+    const rgb = (c && c.rgb) || [128, 128, 128];
+    return 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2];
+  });
+}
+
+function makeAutoPanelSourceLuma(rgb, srcW, srcH, panelW, panelH) {
+  const out = new Uint8Array(panelW * panelH);
+  for (let y = 0; y < panelH; y++) {
+    const sy = Math.min(srcH - 1, Math.max(0, Math.round((y + 0.5) * srcH / panelH - 0.5)));
+    for (let x = 0; x < panelW; x++) {
+      const sx = Math.min(srcW - 1, Math.max(0, Math.round((x + 0.5) * srcW / panelW - 0.5)));
+      const j = (sy * srcW + sx) * 3;
+      out[y * panelW + x] = Math.round(0.299 * rgb[j] + 0.587 * rgb[j+1] + 0.114 * rgb[j+2]);
+    }
+  }
+  return out;
+}
+
+function scoreAutoCandidate(indices, values, stats, sourceY, panelW, panelH) {
+  const n = panelW * panelH;
+  const palY = paletteLumaTable();
+  const yBlack = palY[0], yWhite = palY[1], range = Math.max(1, yWhite - yBlack);
+  const opticalY = opticalLumaFromIndices(indices, panelW, panelH);
+  const counts = new Array(PALETTE_ORDER.length).fill(0);
+  let sum=0, sum2=0, visible=0, shadowChalk=0;
+  for (let i = 0; i < n; i++) {
+    const idx = indices[i] || 0;
+    counts[idx]++;
+    const y = opticalY[i];
+    sum += y; sum2 += y*y;
+    const sy = sourceY[i];
+    if (sy > 188 && (idx === 0 || idx === 3 || idx === 4)) visible += (idx === 0 ? 1.25 : 1.0);
+    if (sy < 52 && (idx === 1 || idx === 2)) shadowChalk += (idx === 1 ? 1.0 : 0.55);
+  }
+  const mean = sum / n;
+  const std = Math.sqrt(Math.max(0, sum2 / n - mean * mean));
+  const mood = clampNum(stats.p50 / 255, 0, 1);
+  let targetMean = yBlack + range * clampNum(0.38 + 0.34 * Math.pow(mood, 0.72), 0.45, 0.72);
+  if (stats.edge > 46 && stats.chroma < 34) targetMean += 5;
+  if (stats.skin > 0.075) targetMean += 2;
+  const targetStd = clampNum(range * (0.17 + 0.21 * clampNum(stats.spread / 170, 0, 1)), 13, 30);
+
+  const frac = counts.map(c => c / n);
+  let score = Math.abs(mean - targetMean) * 0.92 + Math.abs(std - targetStd) * 0.78;
+  score += (visible / n) * (stats.edge > 46 && stats.chroma < 34 ? 36 : 118);
+  score += (shadowChalk / n) * 42;
+  if (frac[0] > 0.34 && stats.dark < 0.22) score += (frac[0] - 0.34) * 34;
+  if (frac[1] > 0.78 && stats.std > 34) score += (frac[1] - 0.78) * 26;
+
+  const redFrac = frac[3], blueFrac = frac[4], greenFrac = frac[5], yellowFrac = frac[2];
+  if (stats.green > stats.red * 1.25 && stats.green > 0.10 && redFrac > greenFrac + yellowFrac * 0.7) {
+    score += (redFrac - greenFrac) * 42;
+  }
+  if (stats.blue > stats.red * 1.25 && stats.blue > 0.08 && redFrac + yellowFrac > blueFrac + 0.08) {
+    score += (redFrac + yellowFrac - blueFrac) * 34;
+  }
+  if ((stats.flat > 0.42 || stats.bright > 0.34) && values.smoothness < 8) score += (8 - values.smoothness) * 0.20;
+  if (stats.edge > 48 && values.sharpen < 38) score += (38 - values.sharpen) * 0.10;
+  return score;
+}
+
+function nextUiFrame() {
+  return new Promise(resolve => requestAnimationFrame(resolve));
+}
+
+async function simulateAutoCandidate(baseRgb, srcW, srcH, panelW, panelH, values) {
+  const rgbLen = baseRgb.length;
+  const rgbPtr = wasm.malloc(rgbLen);
+  const heap = new Uint8Array(wasm.memory.buffer, rgbPtr, rgbLen);
+  heap.set(baseRgb);
+  applyExtraAdjustRgb888(heap, srcW, srcH, values);
+
+  const cfgPtr = wasm.malloc(28);
+  writeAdjustCfg(cfgPtr, values);
+  const packedLen = panelW * panelH / 2;
+  const packedPtr = wasm.malloc(packedLen);
+  const indicesLen = panelW * panelH;
+  const indicesPtr = wasm.malloc(indicesLen);
+  const quantize = selectDither15xFunction(true);
+  const rc = quantize(rgbPtr, panelW, panelH, cfgPtr, packedPtr, indicesPtr);
+  if (rc !== 0) {
+    wasm.free(rgbPtr); wasm.free(cfgPtr); wasm.free(packedPtr); wasm.free(indicesPtr);
+    throw new Error('auto candidate rc=' + rc);
+  }
+  const indices = new Uint8Array(wasm.memory.buffer, indicesPtr, indicesLen).slice();
+  wasm.free(rgbPtr); wasm.free(cfgPtr); wasm.free(packedPtr); wasm.free(indicesPtr);
+  return indices;
+}
+
+async function refineAutoAdjustPanelAware(seed) {
+  await loadWasm();
+  if (calib) pushPaletteToWasm();
+
+  const panelW = 120, panelH = 180;
+  const srcW = panelW * 3 / 2, srcH = panelH * 3 / 2;
+  const canvas = bakeCroppedCanvas(srcW, srcH);
+  const baseRgb = extractRgbFromCanvas(canvas, srcW, srcH);
+  const sourceY = makeAutoPanelSourceLuma(baseRgb, srcW, srcH, panelW, panelH);
+  let best = seed.values;
+  let bestScore = Infinity;
+
+  let n = 0;
+  for (const values of makeAutoCandidates(seed)) {
+    const indices = await simulateAutoCandidate(baseRgb, srcW, srcH, panelW, panelH, values);
+    const score = scoreAutoCandidate(indices, values, seed.stats, sourceY, panelW, panelH);
+    if (score < bestScore) {
+      bestScore = score;
+      best = values;
+    }
+    if ((++n & 3) === 0) await nextUiFrame();
+  }
+  return {...seed, values: best, score: bestScore};
+}
+
+let autoRunId = 0;
+async function applyAutoAdjust() {
   if (!xform.src) return;
+  const runId = ++autoRunId;
   const canvas = bakePreviewCanvas();
-  const result = buildAutoAdjust(analyzeCanvasForAuto(canvas));
+  const seed = buildAutoAdjust(analyzeCanvasForAuto(canvas));
+  let result = seed;
+  toastKey('toast.autoTuning');
+  try {
+    await nextUiFrame();
+    result = await refineAutoAdjustPanelAware(seed);
+  } catch (e) {
+    console.warn('panel-aware auto failed; using heuristic auto', e);
+  }
+  if (runId !== autoRunId || !xform.src || !uploadSheet.classList.contains('is-open')) return;
   outputMode = 'dither';
   applyAdjustValues(result.values);
   const sel = document.getElementById('preset-select');
   if (sel) sel.value = result.key;
-  toast('Auto: ' + BUILTIN_PRESETS[result.key].label);
+  toastKey('toast.autoTuned', {preset: BUILTIN_PRESETS[result.key].label});
 }
 
 // Transform state for the source canvas inside the stage.
@@ -1332,15 +2865,16 @@ let uploadAutoApplied = false;
 
 // Per-image adjustment state — defaults pulled from calib.adjust after the
 // upload sheet opens. Values match the C adjust_cfg_t units exactly.
-const perImageAdjust = {brightness:0, exposure:0, contrast:106, saturation:106, vibrance:24, gamma:96, temperature:106, tint:99, smoothness:10, sharpen:34, vignette:14};
+const perImageAdjust = {brightness:0, exposure:0, contrast:106, saturation:136, vibrance:64, gamma:96, temperature:106, tint:99, smoothness:10, sharpen:34, vignette:14};
 
 function setPerImageAdjustFromCalib() {
   outputMode = 'dither';
+  ditherMode = normalizeDitherMode(calib && calib.pipeline && calib.pipeline.ditherMode);
   const a = (calib && calib.adjust) || CALIB_FALLBACK.adjust;
   perImageAdjust.brightness  = a.brightness;
   perImageAdjust.exposure    = (a.exposure != null) ? a.exposure : CALIB_FALLBACK.adjust.exposure;
   perImageAdjust.contrast    = a.contrast;
-  perImageAdjust.saturation  = a.saturation;
+  perImageAdjust.saturation  = (a.saturation != null) ? a.saturation : CALIB_FALLBACK.adjust.saturation;
   perImageAdjust.vibrance    = (a.vibrance != null) ? a.vibrance : CALIB_FALLBACK.adjust.vibrance;
   perImageAdjust.gamma       = a.gamma;
   perImageAdjust.temperature = a.temperature;
@@ -1455,11 +2989,11 @@ document.getElementById('btn-save-preset').onclick = () => {
   const name = prompt('Preset name?');
   if (!name) return;
   const key = 'custom_' + Date.now();
-  customPresets[key] = {label:name.trim(), mode:outputMode, values:{...perImageAdjust}};
+  customPresets[key] = {label:name.trim(), mode:outputMode, ditherMode, values:{...perImageAdjust}};
   saveCustomPresets();
   renderPresetSelect();
   document.getElementById('preset-select').value = key;
-  toast('Preset saved');
+  toastKey('toast.presetSaved');
 };
 renderPresetSelect();
 
@@ -1469,11 +3003,11 @@ renderPresetSelect();
 // adjust_cfg_t ABI. They run before WASM enhancement/dither for both preview
 // and final upload: exposure is multiplicative, vignette can compensate
 // dark corners, and sharpen adds user-controlled high-frequency detail.
-function applyExtraAdjustRgb888(buf, w, h) {
-  const exposure = perImageAdjust.exposure || 0;
-  const vibrance = perImageAdjust.vibrance || 0;
-  const vignette = perImageAdjust.vignette || 0;
-  const sharpen  = perImageAdjust.sharpen || 0;
+function applyExtraAdjustRgb888(buf, w, h, values = perImageAdjust) {
+  const exposure = values.exposure || 0;
+  const vibrance = values.vibrance || 0;
+  const vignette = values.vignette || 0;
+  const sharpen  = values.sharpen || 0;
 
   if (exposure) {
     const gain = Math.pow(2, exposure / 100);
@@ -1540,10 +3074,76 @@ function applyExtraAdjustRgb888(buf, w, h) {
   }
 }
 
-function applyPanelPreviewOptics(img) {
-  // EINK pigments and phone viewing distance optically integrate neighbouring
-  // dots. A very small local blend makes the browser preview less LCD-harsh
-  // and closer to the perceived panel output.
+function rgbFromIndexWeights(weights, n = opticalMixExponent()) {
+  const pal = calibratedPaletteRgb();
+  let total = 0;
+  for (const v of weights) total += v || 0;
+  if (total <= 0) return [128, 128, 128];
+  const out = [0, 0, 0];
+  for (let i = 0; i < PALETTE_ORDER.length; i++) {
+    const f = (weights[i] || 0) / total;
+    if (f <= 0) continue;
+    const rgb = pal[i] || [128,128,128];
+    for (let ch = 0; ch < 3; ch++) {
+      out[ch] += f * Math.pow(Math.max(0, rgb[ch]) / 255, 1 / n);
+    }
+  }
+  return out.map(v => clampInt(Math.pow(Math.max(0, v), n) * 255, 0, 255));
+}
+
+function opticalLumaFromIndices(indices, w, h) {
+  const out = new Float32Array(w * h);
+  const n = opticalMixExponent();
+  const kernel = [
+    [-1,-1,1], [0,-1,2], [1,-1,1],
+    [-1, 0,2], [0, 0,4], [1, 0,2],
+    [-1, 1,1], [0, 1,2], [1, 1,1],
+  ];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const weights = [0,0,0,0,0,0];
+      for (const [dx, dy, wt] of kernel) {
+        const xx = Math.max(0, Math.min(w - 1, x + dx));
+        const yy = Math.max(0, Math.min(h - 1, y + dy));
+        weights[indices[yy * w + xx] || 0] += wt;
+      }
+      const rgb = rgbFromIndexWeights(weights, n);
+      out[y * w + x] = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2];
+    }
+  }
+  return out;
+}
+
+function applyPanelPreviewOptics(img, indices) {
+  // EINK pigments and viewing distance optically integrate neighbouring dots.
+  // If mixed-patch readings exist, opticalMixExponent() is fitted from those
+  // measurements; otherwise it falls back to a conservative paper model.
+  if (indices && indices.length === img.width * img.height) {
+    const w = img.width, h = img.height;
+    const n = opticalMixExponent();
+    const kernel = [
+      [-1,-1,1], [0,-1,2], [1,-1,1],
+      [-1, 0,2], [0, 0,4], [1, 0,2],
+      [-1, 1,1], [0, 1,2], [1, 1,1],
+    ];
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const weights = [0,0,0,0,0,0];
+        for (const [dx, dy, wt] of kernel) {
+          const xx = Math.max(0, Math.min(w - 1, x + dx));
+          const yy = Math.max(0, Math.min(h - 1, y + dy));
+          weights[indices[yy * w + xx] || 0] += wt;
+        }
+        const rgb = rgbFromIndexWeights(weights, n);
+        const i = (y * w + x) * 4;
+        img.data[i+0] = rgb[0];
+        img.data[i+1] = rgb[1];
+        img.data[i+2] = rgb[2];
+      }
+    }
+    return;
+  }
+
   const w = img.width, h = img.height;
   const src = new Uint8ClampedArray(img.data);
   const a = 0.18;
@@ -1563,6 +3163,77 @@ function applyPanelPreviewOptics(img) {
   }
 }
 
+function extractRgbFromCanvas(canvas, w, h) {
+  const ctx = canvas.getContext('2d');
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const out = new Uint8Array(w * h * 3);
+  const src = imageData.data;
+  for (let i = 0, j = 0; i < src.length; i += 4, j += 3) {
+    out[j+0] = src[i+0];
+    out[j+1] = src[i+1];
+    out[j+2] = src[i+2];
+  }
+  return out;
+}
+
+function writeAdjustCfg(ptr, values = perImageAdjust) {
+  const cfgView = new Int32Array(wasm.memory.buffer, ptr, 7);
+  cfgView[0] = values.brightness;
+  cfgView[1] = values.contrast;
+  cfgView[2] = values.saturation;
+  cfgView[3] = values.gamma;
+  cfgView[4] = values.temperature;
+  cfgView[5] = values.tint;
+  cfgView[6] = values.smoothness;
+}
+
+function calibratedPaletteRgb() {
+  return PALETTE_ORDER.map(name => {
+    const c = (calib && calib.palette && calib.palette[name])
+              || CALIB_FALLBACK.palette[name];
+    return (c && c.rgb) || [128, 128, 128];
+  });
+}
+
+function imageDataFromRgb888(rgb, w, h) {
+  const img = new ImageData(w, h);
+  for (let i = 0, j = 0; i < w * h; i++, j += 3) {
+    img.data[i*4+0] = rgb[j+0];
+    img.data[i*4+1] = rgb[j+1];
+    img.data[i*4+2] = rgb[j+2];
+    img.data[i*4+3] = 255;
+  }
+  return img;
+}
+
+function downsampleRgbForPreview(rgb, srcW, srcH, outW, outH) {
+  const hi = imageDataFromRgb888(rgb, srcW, srcH);
+  const c = document.createElement('canvas');
+  c.width = srcW; c.height = srcH;
+  const ctx = c.getContext('2d');
+  ctx.putImageData(hi, 0, 0);
+  const out = document.createElement('canvas');
+  out.width = outW; out.height = outH;
+  const oc = out.getContext('2d');
+  oc.imageSmoothingEnabled = true;
+  oc.imageSmoothingQuality = 'high';
+  oc.drawImage(c, 0, 0, outW, outH);
+  return oc.getImageData(0, 0, outW, outH);
+}
+
+function imageDataFromIndices(indices, w, h) {
+  const palRGB = calibratedPaletteRgb();
+  const img = new ImageData(w, h);
+  for (let i = 0; i < w * h; i++) {
+    const rgb = palRGB[indices[i]] || [128, 128, 128];
+    img.data[i*4+0] = rgb[0];
+    img.data[i*4+1] = rgb[1];
+    img.data[i*4+2] = rgb[2];
+    img.data[i*4+3] = 255;
+  }
+  return img;
+}
+
 //
 // Small in-panel canvas that shows the current crop+adjust+dither result
 // while the user is still in the upload sheet.  Two modes, toggled by
@@ -1570,17 +3241,19 @@ function applyPanelPreviewOptics(img) {
 //
 //   "source"  — the adjusted/enhanced RGB (post controls, pre-dither), so the
 //               user can see the colour-correction effect cleanly.
-//   "dithered" — the wasm_dither output, rendered through the calibrated
+//   "dithered" — the final 15× WASM output, rendered through the calibrated
 //               panel-ink RGB values, so the user gets a faithful preview
 //               of what the panel will actually display.
 //
-// To minimise WASM/JS thrash we share a single dither call: wasm_dither
-// applies the adjust IN PLACE on its input buffer and writes the palette
-// indices to indices_opt — so one round-trip yields *both* preview images.
+// To minimise WASM/JS thrash we share a single 15× quantise call:
+// wasm_dither_15x / wasm_flat_fill_15x applies the C adjust/enhancement
+// in-place and writes the final panel palette indices to indices_opt, so one
+// round-trip yields both preview images.
 //
-// Resolution is the full native panel grid (400×600).  This costs more than
-// the old half-size preview, but avoids preview-only resampling artefacts and
-// makes edge/detail decisions match the final panel framebuffer much better.
+// Preview now runs the same 1.5× supersample WASM path as Send
+// (600×900 → 400×600).  That costs more than a direct 400×600 preview, but
+// it removes the last preview/final mismatch: downsample phase, unsharp mask,
+// local refinement, and palette indices are identical to the uploaded .bin.
 
 const PREVIEW_W = TW, PREVIEW_H = TH;
 let previewMode = 'dithered'; // 'source' | 'dithered'
@@ -1589,6 +3262,12 @@ let previewDitherImg = null;
 let previewDebounceTimer = null;
 let previewInFlight = false;
 let previewPending = false;
+
+function selectDither15xFunction(forceDither = false) {
+  if (!forceDither && outputMode === 'flat-russian') return wasm.flatFill15x;
+  if (normalizeDitherMode(ditherMode) === 'classic') return wasm.dither15x;
+  return wasm.ditherE6Mix15x || wasm.dither15x;
+}
 
 function schedulePreviewUpdate() {
   if (!uploadSheet.classList.contains('is-open') || !uploadSheet.classList.contains('upload-adjust') || !xform.src) return;
@@ -1609,79 +3288,43 @@ async function runPreviewUpdate() {
     await loadWasm();
     if (calib) pushPaletteToWasm();
 
-    const canvas = bakePreviewCanvas();
-    const ctx = canvas.getContext('2d');
-    const imageData = ctx.getImageData(0, 0, PREVIEW_W, PREVIEW_H);
-
-    const rgbLen = PREVIEW_W * PREVIEW_H * 3;
+    const canvasHi = bakeCanvas();
+    const baseRgb = extractRgbFromCanvas(canvasHi, SW, SH);
+    const rgbLen = SW * SH * 3;
     const rgbPtr = wasm.malloc(rgbLen);
     const heap   = new Uint8Array(wasm.memory.buffer, rgbPtr, rgbLen);
-    const src    = imageData.data;
-    for (let i = 0, j = 0; i < src.length; i += 4, j += 3) {
-      heap[j+0] = src[i+0];
-      heap[j+1] = src[i+1];
-      heap[j+2] = src[i+2];
-    }
-    applyExtraAdjustRgb888(heap, PREVIEW_W, PREVIEW_H);
+    heap.set(baseRgb);
+    applyExtraAdjustRgb888(heap, SW, SH);
 
     const cfgPtr = wasm.malloc(28);
-    const cfgView = new Int32Array(wasm.memory.buffer, cfgPtr, 7);
-    cfgView[0] = perImageAdjust.brightness;
-    cfgView[1] = perImageAdjust.contrast;
-    cfgView[2] = perImageAdjust.saturation;
-    cfgView[3] = perImageAdjust.gamma;
-    cfgView[4] = perImageAdjust.temperature;
-    cfgView[5] = perImageAdjust.tint;
-    cfgView[6] = perImageAdjust.smoothness;
+    writeAdjustCfg(cfgPtr);
 
-    const packedLen  = PREVIEW_W * PREVIEW_H / 2;
+    const packedLen  = TW * TH / 2;
     const packedPtr  = wasm.malloc(packedLen);
-    const indicesLen = PREVIEW_W * PREVIEW_H;
+    const indicesLen = TW * TH;
     const indicesPtr = wasm.malloc(indicesLen);
 
-    const quantize = outputMode === 'flat-russian' ? wasm.flatFill : wasm.dither;
-    const rc = quantize(rgbPtr, PREVIEW_W, PREVIEW_H, cfgPtr,
-                        packedPtr, indicesPtr);
+    const quantize = selectDither15xFunction();
+    const rc = quantize(rgbPtr, TW, TH, cfgPtr, packedPtr, indicesPtr);
     if (rc !== 0) {
       wasm.free(rgbPtr); wasm.free(cfgPtr);
       wasm.free(packedPtr); wasm.free(indicesPtr);
       throw new Error('preview quantize rc=' + rc);
     }
 
-    // wasm_dither applied the adjust in-place on rgbPtr — the buffer now
-    // holds adjusted RGB.  Copy out before freeing (WASM heap may move on
-    // growth; .slice() snapshots).
+    // The WASM 15× path applied adjust/enhancement in-place on the 600×900
+    // buffer. Copy it before freeing, then downsample only for source preview.
     const adjusted = new Uint8Array(wasm.memory.buffer, rgbPtr, rgbLen).slice();
     const indices  = new Uint8Array(wasm.memory.buffer, indicesPtr, indicesLen).slice();
 
     wasm.free(rgbPtr); wasm.free(cfgPtr);
     wasm.free(packedPtr); wasm.free(indicesPtr);
 
-    // Source preview = adjusted RGB straight to RGBA.
-    const srcImg = new ImageData(PREVIEW_W, PREVIEW_H);
-    for (let i = 0, j = 0; i < indicesLen; i++, j += 3) {
-      srcImg.data[i*4+0] = adjusted[j+0];
-      srcImg.data[i*4+1] = adjusted[j+1];
-      srcImg.data[i*4+2] = adjusted[j+2];
-      srcImg.data[i*4+3] = 255;
-    }
-    previewSourceImg = srcImg;
+    previewSourceImg = downsampleRgbForPreview(adjusted, SW, SH, PREVIEW_W, PREVIEW_H);
 
-    // Dithered preview = indices → calibrated panel RGB.
-    const palRGB = PALETTE_ORDER.map(name => {
-      const c = (calib && calib.palette && calib.palette[name])
-                || CALIB_FALLBACK.palette[name];
-      return (c && c.rgb) || [128, 128, 128];
-    });
-    const ditImg = new ImageData(PREVIEW_W, PREVIEW_H);
-    for (let i = 0; i < indicesLen; i++) {
-      const rgb = palRGB[indices[i]] || [128, 128, 128];
-      ditImg.data[i*4+0] = rgb[0];
-      ditImg.data[i*4+1] = rgb[1];
-      ditImg.data[i*4+2] = rgb[2];
-      ditImg.data[i*4+3] = 255;
-    }
-    applyPanelPreviewOptics(ditImg);
+    // Dithered preview = final indices → calibrated panel RGB.
+    const ditImg = imageDataFromIndices(indices, PREVIEW_W, PREVIEW_H);
+    applyPanelPreviewOptics(ditImg, indices);
     previewDitherImg = ditImg;
 
     drawPreview();
@@ -1724,31 +3367,28 @@ function drawPreviewPlaceholder() {
       c.fillRect(0, PREVIEW_H - 28, PREVIEW_W, 28);
       c.fillStyle = '#333';
       c.font = '12px sans-serif';
-      c.fillText('Rendering dither...', 10, PREVIEW_H - 10);
+      c.fillText(tr('upload.previewLoading'), 10, PREVIEW_H - 10);
     }
   } catch (e) { console.warn('preview placeholder failed', e); }
 }
 
-// Bake at PREVIEW_W × PREVIEW_H using the same transform + mask crop that
-// bakeCanvas() uses for the final 1.5× supersample.  Different output
-// resolution, identical geometry.
-function bakePreviewCanvas() {
-  // Same direct source→output CTM trick as bakeCanvas — see that function
-  // for the matrix derivation.  No stage-pixel intermediate.
+// Bake using the same transform + mask crop for Auto analysis, preview, and
+// final Send.  The caller only changes output resolution.
+function bakeCroppedCanvas(outW, outH) {
   const g = normalizedCropGeom(cropGeom || currentCropGeom());
   const mw = g.mw;
   const mh = g.mh;
   const out = document.createElement('canvas');
-  out.width  = PREVIEW_W;
-  out.height = PREVIEW_H;
+  out.width  = outW;
+  out.height = outH;
   const oc = out.getContext('2d');
   oc.imageSmoothingEnabled = true;
   oc.imageSmoothingQuality = 'high';
   oc.fillStyle = '#fff';
-  oc.fillRect(0, 0, PREVIEW_W, PREVIEW_H);
+  oc.fillRect(0, 0, outW, outH);
 
   oc.save();
-  oc.scale(PREVIEW_W / mw, PREVIEW_H / mh);
+  oc.scale(outW / mw, outH / mh);
   oc.translate(mw / 2 + g.tx, mh / 2 + g.ty);
   oc.rotate(g.rot * Math.PI / 180);
   oc.scale(g.s, g.s);
@@ -1756,6 +3396,12 @@ function bakePreviewCanvas() {
   oc.drawImage(xform.src, 0, 0);
   oc.restore();
   return out;
+}
+
+// Bake at PREVIEW_W × PREVIEW_H for fast analysis/placeholders. The live
+// dithered preview itself uses bakeCanvas() so it matches Send exactly.
+function bakePreviewCanvas() {
+  return bakeCroppedCanvas(PREVIEW_W, PREVIEW_H);
 }
 
 // Toggle source ↔ dithered by tapping the preview canvas itself.  The
@@ -1767,8 +3413,8 @@ function setPreviewMode(mode) {
   const st = document.getElementById('preview-status');
   if (st) {
     st.textContent = (mode === 'source')
-      ? 'Source (tap to see dithered)'
-      : 'Dithered (tap to see source)';
+      ? tr('upload.previewSource')
+      : tr('upload.previewDithered');
   }
   drawPreview();
 }
@@ -1828,7 +3474,7 @@ function setUploadStep(step) {
   sheet.classList.toggle('upload-crop', step === 'crop');
   sheet.classList.toggle('upload-adjust', step === 'adjust');
   const title = sheet.querySelector('.sheet__title');
-  if (title) title.textContent = step === 'crop' ? 'Crop' : 'Adjust';
+  if (title) title.textContent = step === 'crop' ? tr('upload.cropTitle') : tr('upload.adjustTitle');
   if (step === 'crop') {
     cropGeom = null;
     requestAnimationFrame(() => { layoutMask(); applyXform(); });
@@ -1840,8 +3486,9 @@ function setUploadStep(step) {
     if (!uploadAutoApplied && !uploadBaseOverride) {
       uploadAutoApplied = true;
       applyAutoAdjust();
+    } else {
+      schedulePreviewUpdate();
     }
-    schedulePreviewUpdate();
   }
 }
 document.getElementById('btn-upload-next').onclick = () => setUploadStep('adjust');
@@ -2085,23 +3732,34 @@ if (splitEl) {
   splitEl.addEventListener('pointercancel', endSplit);
 }
 
-// Send: bake the cropped image as a 400×600 canvas, run WASM dither for the
-// pre-quantised .bin, and upload BOTH the JPG (for browser preview / backup)
-// and the BIN (for direct EPD push).
+function cloneCanvas(canvas) {
+  const out = document.createElement('canvas');
+  out.width = canvas.width;
+  out.height = canvas.height;
+  out.getContext('2d').drawImage(canvas, 0, 0);
+  return out;
+}
+
+function encodeJpeg(canvas, quality = 0.85) {
+  return new Promise(res => canvas.toBlob(b => res(b), 'image/jpeg', quality));
+}
+
+// Send: bake the cropped source image as the 600×900 supersample canvas, run
+// the same 15× WASM path used by live preview, and upload BOTH the unadjusted
+// JPG (homepage/browser preview) and the adjusted+dithered BIN (EPD push).
 document.getElementById('btn-send').onclick = async () => {
   if (!xform.src) return;
   const sendBtn = document.getElementById('btn-send');
   sendBtn.disabled = true;
   try {
-    toast('Encoding…');
-    const canvas400 = bakeCanvas();
-    // Kick off the JPEG encode in parallel with the dither — they touch
-    // separate data and the JPEG encoder is async.
-    const jpgPromise = new Promise(res =>
-      canvas400.toBlob(b => res(b), 'image/jpeg', 0.85));
+    toastKey('toast.encoding');
+    const canvasHi = bakeCanvas();
+    // Snapshot before any adjust/dither work: the web homepage should show
+    // the cropped original, while only the .bin gets the adjust settings.
+    const jpgPromise = encodeJpeg(cloneCanvas(canvasHi));
 
-    toast('Dithering…');
-    const binBytes = await ditherCanvas(canvas400);
+    toastKey('toast.dithering');
+    const binBytes = await ditherCanvas(canvasHi);
 
     const jpgBlob = await jpgPromise;
     if (!jpgBlob) throw new Error('JPEG encode failed');
@@ -2120,16 +3778,16 @@ document.getElementById('btn-send').onclick = async () => {
     // user feedback.  Failure here is non-fatal (the photo is still on the
     // device), so we surface a toast and keep going.
     try {
-      const sidecar = JSON.stringify({adjust: {...perImageAdjust}, mode: outputMode});
+      const sidecar = JSON.stringify({adjust: {...perImageAdjust}, mode: outputMode, ditherMode});
       const r3 = await api.upload(base + '.json', new Blob([sidecar]),
                                   'application/json');
       if (!r3.ok) {
         console.warn('sidecar upload http', r3.status);
-        toast('Save: tune params not stored (' + r3.status + ')');
+        toastKey('toast.sidecarStatus', {status: r3.status});
       }
     } catch (e) {
       console.warn('sidecar upload failed', e);
-      toast('Save: tune params not stored');
+      toastKey('toast.sidecarFailed');
     }
 
     uploadSheet.classList.remove('is-open');
@@ -2138,10 +3796,10 @@ document.getElementById('btn-send').onclick = async () => {
     // a brand-new upload and for a re-tune. The .bin fast path on the device
     // means the panel updates in <1 s after the EPD finishes its hold.
     try { await api.show(base + '.jpg'); } catch (e) { /* best effort */ }
-    toast('Uploaded — refreshing panel');
+    toastKey('toast.uploaded');
     refresh();
   } catch (e) {
-    toast(e && e.message ? e.message : 'Upload failed');
+    toast(e && e.message ? e.message : tr('toast.uploadFailed'));
     console.error(e);
   } finally {
     sendBtn.disabled = false;
@@ -2174,29 +3832,7 @@ document.getElementById('btn-send').onclick = async () => {
 // maps to T·R·S applied to (0,0) which is (mw/2, mh/2), then × (SW/mw, SH/mh)
 // = (SW/2, SH/2).  Source centre lands at output centre. ✓
 function bakeCanvas() {
-  const g = normalizedCropGeom(cropGeom || currentCropGeom());
-  const mw = g.mw;
-  const mh = g.mh;
-  const out = document.createElement('canvas');
-  out.width  = SW;
-  out.height = SH;
-  const oc = out.getContext('2d');
-  oc.imageSmoothingEnabled = true;
-  oc.imageSmoothingQuality = 'high';
-  // White fill so any uncovered area maps to "white ink" rather than the
-  // canvas-default transparent (which premultiplies to black).
-  oc.fillStyle = '#fff';
-  oc.fillRect(0, 0, SW, SH);
-
-  oc.save();
-  oc.scale(SW / mw, SH / mh);
-  oc.translate(mw / 2 + g.tx, mh / 2 + g.ty);
-  oc.rotate(g.rot * Math.PI / 180);
-  oc.scale(g.s, g.s);
-  oc.translate(-xform.src.width / 2, -xform.src.height / 2);
-  oc.drawImage(xform.src, 0, 0);
-  oc.restore();
-  return out;
+  return bakeCroppedCanvas(SW, SH);
 }
 
 // Hand the SW × SH (1.5× supersample) canvas to WASM, return the packed
@@ -2205,41 +3841,25 @@ async function ditherCanvas(canvasHi) {
   await loadWasm();
   if (calib) pushPaletteToWasm();
 
-  const ctx = canvasHi.getContext('2d');
-  const imageData = ctx.getImageData(0, 0, SW, SH);
-  // imageData.data is RGBA8 (4 bytes/px). WASM expects RGB888 — copy the
-  // alpha-stripped buffer into a heap allocation.
+  const baseRgb = extractRgbFromCanvas(canvasHi, SW, SH);
   const rgbLen = SW * SH * 3;
   const rgbPtr = wasm.malloc(rgbLen);
   const heap = new Uint8Array(wasm.memory.buffer, rgbPtr, rgbLen);
-  const src = imageData.data;
-  for (let i = 0, j = 0; i < src.length; i += 4, j += 3) {
-    heap[j+0] = src[i+0];
-    heap[j+1] = src[i+1];
-    heap[j+2] = src[i+2];
-  }
+  heap.set(baseRgb);
   applyExtraAdjustRgb888(heap, SW, SH);
 
   // adjust_cfg_t = 7 × int32 in declaration order.  Tint is the magenta-
   // green axis (between temperature and smoothness); smoothness drives the
   // solid-fill snap in the dither (see dither.c).
   const cfgPtr = wasm.malloc(28);
-  const cfgView = new Int32Array(wasm.memory.buffer, cfgPtr, 7);
-  cfgView[0] = perImageAdjust.brightness;
-  cfgView[1] = perImageAdjust.contrast;
-  cfgView[2] = perImageAdjust.saturation;
-  cfgView[3] = perImageAdjust.gamma;
-  cfgView[4] = perImageAdjust.temperature;
-  cfgView[5] = perImageAdjust.tint;
-  cfgView[6] = perImageAdjust.smoothness;
+  writeAdjustCfg(cfgPtr);
 
   const packedLen = TW * TH / 2;     // 120000
   const packedPtr = wasm.malloc(packedLen);
 
   // Panel resolution (TW, TH); WASM derives the 1.5× source dims internally.
   // Russian preset uses the pure flat-fill quantiser instead of diffusion.
-  const rc = (outputMode === 'flat-russian' ? wasm.flatFill15x : wasm.dither15x)(
-    rgbPtr, TW, TH, cfgPtr, packedPtr, 0);
+  const rc = selectDither15xFunction()(rgbPtr, TW, TH, cfgPtr, packedPtr, 0);
   if (rc !== 0) {
     wasm.free(rgbPtr); wasm.free(cfgPtr); wasm.free(packedPtr);
     throw new Error('wasm quantize failed rc=' + rc);
@@ -2257,150 +3877,329 @@ async function ditherCanvas(canvasHi) {
 
 // ---------- Calibration wizard ----------
 //
-// One inkable at a time, walk the user through:
-//   1) push that solid ink to the panel
-//   2) wait ~30 s for the EPD to settle
-//   3) drag HSL sliders so the on-screen swatch matches the panel
-//   4) save & advance to the next ink
-//
-// Storage stays as RGB triples in calib.palette[name].rgb — the wizard
-// just gives a friendlier way to set those numbers.
+// Calibration is now colorimeter-first.  Solid ink readings still drive the
+// palette LAB used by the WASM dither; optional mixed-patch readings fit the
+// paper-optics preview / Auto scoring model.  Missing mixed patches fall back
+// to the measured six-ink palette plus a Yule-Nielsen style optical mix.
 
 const PALETTE_INK_CODE = {  // matches PALETTE_INK_CODE in palette.c
   black: 0, white: 1, yellow: 2, red: 3, blue: 5, green: 6,
 };
 
+function w(obj) { return obj; }
+const CALIB_TARGETS = [
+  {id:'black',  label:'BLACK solid',  solid:'black',  weights:w({black:100})},
+  {id:'white',  label:'WHITE solid',  solid:'white',  weights:w({white:100})},
+  {id:'yellow', label:'YELLOW solid', solid:'yellow', weights:w({yellow:100})},
+  {id:'red',    label:'RED solid',    solid:'red',    weights:w({red:100})},
+  {id:'blue',   label:'BLUE solid',   solid:'blue',   weights:w({blue:100})},
+  {id:'green',  label:'GREEN solid',  solid:'green',  weights:w({green:100})},
+
+  {id:'white_black_25',  label:'WHITE 75 / BLACK 25',  weights:w({white:75, black:25})},
+  {id:'white_black_50',  label:'WHITE 50 / BLACK 50',  weights:w({white:50, black:50})},
+  {id:'white_black_75',  label:'WHITE 25 / BLACK 75',  weights:w({white:25, black:75})},
+  {id:'white_yellow_25', label:'WHITE 75 / YELLOW 25', weights:w({white:75, yellow:25})},
+  {id:'white_yellow_50', label:'WHITE 50 / YELLOW 50', weights:w({white:50, yellow:50})},
+  {id:'white_yellow_75', label:'WHITE 25 / YELLOW 75', weights:w({white:25, yellow:75})},
+  {id:'white_red_25',    label:'WHITE 75 / RED 25',    weights:w({white:75, red:25})},
+  {id:'white_red_50',    label:'WHITE 50 / RED 50',    weights:w({white:50, red:50})},
+  {id:'white_red_75',    label:'WHITE 25 / RED 75',    weights:w({white:25, red:75})},
+  {id:'white_blue_25',   label:'WHITE 75 / BLUE 25',   weights:w({white:75, blue:25})},
+  {id:'white_blue_50',   label:'WHITE 50 / BLUE 50',   weights:w({white:50, blue:50})},
+  {id:'white_blue_75',   label:'WHITE 25 / BLUE 75',   weights:w({white:25, blue:75})},
+  {id:'white_green_25',  label:'WHITE 75 / GREEN 25',  weights:w({white:75, green:25})},
+  {id:'white_green_50',  label:'WHITE 50 / GREEN 50',  weights:w({white:50, green:50})},
+  {id:'white_green_75',  label:'WHITE 25 / GREEN 75',  weights:w({white:25, green:75})},
+
+  {id:'black_yellow_50', label:'BLACK 50 / YELLOW 50', weights:w({black:50, yellow:50})},
+  {id:'black_red_50',    label:'BLACK 50 / RED 50',    weights:w({black:50, red:50})},
+  {id:'black_blue_50',   label:'BLACK 50 / BLUE 50',   weights:w({black:50, blue:50})},
+  {id:'black_green_50',  label:'BLACK 50 / GREEN 50',  weights:w({black:50, green:50})},
+  {id:'yellow_red_50',   label:'YELLOW 50 / RED 50',   weights:w({yellow:50, red:50})},
+  {id:'yellow_blue_50',  label:'YELLOW 50 / BLUE 50',  weights:w({yellow:50, blue:50})},
+  {id:'yellow_green_50', label:'YELLOW 50 / GREEN 50', weights:w({yellow:50, green:50})},
+  {id:'red_blue_50',     label:'RED 50 / BLUE 50',     weights:w({red:50, blue:50})},
+  {id:'red_green_50',    label:'RED 50 / GREEN 50',    weights:w({red:50, green:50})},
+  {id:'blue_green_50',   label:'BLUE 50 / GREEN 50',   weights:w({blue:50, green:50})},
+
+  {id:'skin_wyr',        label:'SKIN MIX W/Y/R',       weights:w({white:68, yellow:24, red:8})},
+  {id:'sky_wb',          label:'SKY MIX W/B',          weights:w({white:78, blue:22})},
+  {id:'foliage_gyk',     label:'FOLIAGE MIX G/Y/K',    weights:w({green:58, yellow:24, black:18})},
+];
+
 const calibSheet      = document.getElementById('sheet-calib');
 const calibTitle      = document.getElementById('calib-step-title');
 const calibProgress   = document.getElementById('calib-progress');
 const calibSwatchBig  = document.getElementById('calib-swatch-big');
-const calibInstr      = document.getElementById('calib-instructions');
+const calibTargetName = document.getElementById('calib-target-name');
+const calibTargetKind = document.getElementById('calib-target-kind');
 const calibActionHint = document.getElementById('calib-actions__hint');
-const calibH          = document.getElementById('calib-h');
-const calibS          = document.getElementById('calib-s');
-const calibL          = document.getElementById('calib-l');
-const calibHVal       = document.getElementById('calib-h-val');
-const calibSVal       = document.getElementById('calib-s-val');
-const calibLVal       = document.getElementById('calib-l-val');
+const calibInputMode  = document.getElementById('calib-input-mode');
+const calibReading    = document.getElementById('calib-reading');
+const calibRequired   = document.getElementById('calib-required-label');
 const calibReadout    = document.getElementById('calib-readout');
 const btnCalibShow    = document.getElementById('btn-calib-show');
 const btnCalibPrev    = document.getElementById('btn-calib-prev');
 const btnCalibSkip    = document.getElementById('btn-calib-skip');
 const btnCalibNext    = document.getElementById('btn-calib-next');
+const btnCalibUse     = document.getElementById('btn-calib-use-reading');
+const btnCalibClear   = document.getElementById('btn-calib-clear-reading');
 
-let wizardStep = 0;          // 0..5
-let wizardWorking = null;    // working copy of calib.palette so Skip/Cancel won't trash it
+let wizardStep = 0;
+let wizardWorking = null;
+
+function ensureMixtureCalib(obj) {
+  if (!obj.palette) obj.palette = JSON.parse(JSON.stringify(CALIB_FALLBACK.palette));
+  for (const name of PALETTE_ORDER) {
+    if (!obj.palette[name] || !Array.isArray(obj.palette[name].rgb)) {
+      obj.palette[name] = JSON.parse(JSON.stringify(CALIB_FALLBACK.palette[name]));
+    }
+  }
+  if (!obj.mixtures) obj.mixtures = {version:1, input:'rgb', patches:{}};
+  if (!obj.mixtures.patches) obj.mixtures.patches = {};
+  return obj;
+}
 
 function clampInt(v, lo, hi) { return Math.max(lo, Math.min(hi, Math.round(v))); }
+function rgbCss(rgb) { return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`; }
+function rgbText(rgb) { return `[${rgb[0]}, ${rgb[1]}, ${rgb[2]}]`; }
 
-// HSL ↔ RGB (sRGB, 0..255 / 0..360 / 0..100).
-function rgbToHsl(r, g, b) {
-  r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  let h, s, l = (max + min) / 2;
-  if (max === min) { h = 0; s = 0; }
-  else {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    switch (max) {
-      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-      case g: h = (b - r) / d + 2; break;
-      case b: h = (r - g) / d + 4; break;
-    }
-    h *= 60;
-  }
-  return [Math.round(h), Math.round(s * 100), Math.round(l * 100)];
+function extractNumbers(str) {
+  return (String(str).match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
 }
-function hslToRgb(h, s, l) {
-  h /= 360; s /= 100; l /= 100;
-  if (s === 0) { const v = Math.round(l * 255); return [v, v, v]; }
-  const hue2rgb = (p, q, t) => {
-    if (t < 0) t += 1; if (t > 1) t -= 1;
-    if (t < 1/6) return p + (q - p) * 6 * t;
-    if (t < 0.5) return q;
-    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-    return p;
-  };
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
+
+function cmykToRgb(c, m, y, k) {
+  c = clampNum(c, 0, 100) / 100;
+  m = clampNum(m, 0, 100) / 100;
+  y = clampNum(y, 0, 100) / 100;
+  k = clampNum(k, 0, 100) / 100;
   return [
-    Math.round(hue2rgb(p, q, h + 1/3) * 255),
-    Math.round(hue2rgb(p, q, h)       * 255),
-    Math.round(hue2rgb(p, q, h - 1/3) * 255),
+    clampInt(255 * (1 - c) * (1 - k), 0, 255),
+    clampInt(255 * (1 - m) * (1 - k), 0, 255),
+    clampInt(255 * (1 - y) * (1 - k), 0, 255),
   ];
 }
 
+function parseCalibrationReading(text, mode) {
+  const nums = extractNumbers(text);
+  if (mode === 'cmyk') {
+    if (nums.length < 4) return null;
+    const cmyk = nums.slice(0, 4).map(v => clampNum(v, 0, 100));
+    return {rgb: cmykToRgb(cmyk[0], cmyk[1], cmyk[2], cmyk[3]), cmyk};
+  }
+  if (nums.length < 3) return null;
+  return {rgb: nums.slice(0, 3).map(v => clampInt(v, 0, 255))};
+}
+
+function targetById(id) {
+  return CALIB_TARGETS.find(t => t.id === id) || null;
+}
+
+function solidRgb(name, source = calib) {
+  const c = source && source.palette && source.palette[name];
+  return (c && Array.isArray(c.rgb)) ? c.rgb : CALIB_FALLBACK.palette[name].rgb;
+}
+
+function measuredPatchEntry(target, source = calib) {
+  if (!target || target.solid) return null;
+  const root = source && source.mixtures && source.mixtures.patches;
+  const entry = root && root[target.id];
+  return (entry && Array.isArray(entry.rgb)) ? entry : null;
+}
+
+function normalizeWeights(weights) {
+  let total = 0;
+  for (const v of Object.values(weights)) total += Math.max(0, +v || 0);
+  if (total <= 0) return [];
+  return Object.entries(weights)
+    .filter(([,v]) => +v > 0)
+    .map(([name, value]) => [name, value / total]);
+}
+
+function mixRgbFromWeights(weights, n = opticalMixExponent(), source = calib) {
+  const parts = normalizeWeights(weights);
+  if (!parts.length) return [128,128,128];
+  const out = [0, 0, 0];
+  for (const [name, frac] of parts) {
+    const rgb = solidRgb(name, source);
+    for (let ch = 0; ch < 3; ch++) {
+      out[ch] += frac * Math.pow(Math.max(0, rgb[ch]) / 255, 1 / n);
+    }
+  }
+  return out.map(v => clampInt(Math.pow(Math.max(0, v), n) * 255, 0, 255));
+}
+
+function targetEffectiveRgb(target, source = calib) {
+  if (target.solid) return solidRgb(target.solid, source).slice();
+  const measured = measuredPatchEntry(target, source);
+  if (measured) return measured.rgb.slice();
+  return mixRgbFromWeights(target.weights, opticalMixExponent(source), source);
+}
+
+function opticalMixExponent(source = calib) {
+  source = ensureMixtureCalib(source || JSON.parse(JSON.stringify(CALIB_FALLBACK)));
+  const measured = [];
+  for (const target of CALIB_TARGETS) {
+    if (target.solid) continue;
+    const entry = measuredPatchEntry(target, source);
+    if (entry) measured.push([target, entry.rgb]);
+  }
+  if (!measured.length) return 1.85;
+  let bestN = 1.85, bestE = Infinity;
+  for (let n = 1.0; n <= 4.01; n += 0.05) {
+    let err = 0;
+    for (const [target, rgb] of measured) {
+      const pred = mixRgbFromWeights(target.weights, n, source);
+      for (let ch = 0; ch < 3; ch++) {
+        const d = pred[ch] - rgb[ch];
+        err += d * d;
+      }
+    }
+    if (err < bestE) { bestE = err; bestN = n; }
+  }
+  return bestN;
+}
+
+function storeTargetReading(target, parsed) {
+  wizardWorking = ensureMixtureCalib(wizardWorking);
+  if (target.solid) {
+    wizardWorking.palette[target.solid].rgb = parsed.rgb;
+    delete wizardWorking.palette[target.solid].lab;
+    return;
+  }
+  const entry = {rgb: parsed.rgb};
+  if (parsed.cmyk) entry.cmyk = parsed.cmyk;
+  wizardWorking.mixtures.patches[target.id] = entry;
+}
+
+function clearTargetReading(target) {
+  wizardWorking = ensureMixtureCalib(wizardWorking);
+  if (target.solid) {
+    wizardWorking.palette[target.solid].rgb = CALIB_FALLBACK.palette[target.solid].rgb.slice();
+    delete wizardWorking.palette[target.solid].lab;
+    return;
+  }
+  delete wizardWorking.mixtures.patches[target.id];
+}
+
+function currentTarget() { return CALIB_TARGETS[wizardStep]; }
+
+function inkLabel(name) {
+  return tr('ink.' + name);
+}
+
+function targetDisplayName(target) {
+  if (target.solid) return tr('calib.solidPatch', {color: inkLabel(target.solid)});
+  const mix = Object.entries(target.weights)
+    .filter(([, weight]) => +weight > 0)
+    .map(([name, weight]) => `${inkLabel(name)} ${Math.round(weight)}%`)
+    .join(' / ');
+  return tr('calib.mixPatch', {mix});
+}
+
+function currentReadingText(target) {
+  if (target.solid) return rgbText(solidRgb(target.solid, wizardWorking));
+  const entry = measuredPatchEntry(target, wizardWorking);
+  if (!entry) return '';
+  return calibInputMode.value === 'cmyk' && entry.cmyk ? `[${entry.cmyk.join('%, ')}%]` : rgbText(entry.rgb);
+}
+
 function renderWizardChrome() {
-  // Progress dots: done / active / pending
   calibProgress.innerHTML = '';
-  for (let i = 0; i < PALETTE_ORDER.length; i++) {
+  for (let i = 0; i < CALIB_TARGETS.length; i++) {
     const dot = document.createElement('span');
     if (i < wizardStep) dot.classList.add('is-done');
     else if (i === wizardStep) dot.classList.add('is-active');
     calibProgress.appendChild(dot);
   }
-  const name = PALETTE_ORDER[wizardStep];
-  calibTitle.textContent = `Calibrate ${name.toUpperCase()} (${wizardStep + 1}/${PALETTE_ORDER.length})`;
+  const target = currentTarget();
+  calibTitle.textContent = tr('calib.stepTitle', {step: wizardStep + 1, total: CALIB_TARGETS.length});
+  if (calibTargetName) calibTargetName.textContent = targetDisplayName(target);
+  const status = target.solid ? tr('calib.requiredReading') : tr('calib.optionalReading');
+  if (calibTargetKind) calibTargetKind.textContent = status;
   btnCalibPrev.disabled = wizardStep === 0;
-  btnCalibNext.textContent = wizardStep === PALETTE_ORDER.length - 1 ? 'Save' : 'Next →';
-  calibActionHint.textContent = '';
+  btnCalibNext.textContent = wizardStep === CALIB_TARGETS.length - 1 ? tr('action.save') : tr('calib.nextPatch');
+  calibRequired.textContent = status;
+  calibActionHint.textContent = target.solid ? tr('calib.showHintRequired') : tr('calib.showHintOptional');
 }
 
 function renderWizardColor() {
-  const name = PALETTE_ORDER[wizardStep];
-  const [r, g, b] = wizardWorking[name].rgb;
-  const css = `rgb(${r},${g},${b})`;
+  const target = currentTarget();
+  const entry = measuredPatchEntry(target, wizardWorking);
+  const rgb = targetEffectiveRgb(target, wizardWorking);
+  const css = rgbCss(rgb);
   calibSwatchBig.style.background = css;
-  calibReadout.textContent = css;
-  const [h, s, l] = rgbToHsl(r, g, b);
-  calibH.value = h; calibHVal.textContent = h + '°';
-  calibS.value = s; calibSVal.textContent = s + '%';
-  calibL.value = l; calibLVal.textContent = l + '%';
+  calibReading.value = currentReadingText(target);
+  if (target.solid) {
+    calibReadout.textContent = tr('calib.readoutSolid', {rgb: rgbText(rgb)});
+  } else if (entry) {
+    calibReadout.textContent = tr('calib.readoutMeasured', {rgb: rgbText(rgb)});
+  } else {
+    calibReadout.textContent = tr('calib.readoutEstimated', {rgb: rgbText(rgb)});
+  }
 }
 
-function updateFromSliders() {
-  const h = +calibH.value, s = +calibS.value, l = +calibL.value;
-  calibHVal.textContent = h + '°';
-  calibSVal.textContent = s + '%';
-  calibLVal.textContent = l + '%';
-  const [r, g, b] = hslToRgb(h, s, l);
-  const name = PALETTE_ORDER[wizardStep];
-  wizardWorking[name].rgb = [r, g, b];
-  const css = `rgb(${r},${g},${b})`;
-  calibSwatchBig.style.background = css;
-  calibReadout.textContent = css;
+function applyCurrentReading() {
+  const target = currentTarget();
+  const raw = calibReading.value.trim();
+  if (!raw) return true;
+  const parsed = parseCalibrationReading(raw, calibInputMode.value);
+  if (!parsed) {
+    toast(calibInputMode.value === 'cmyk' ? tr('calib.enterCmyk') : tr('calib.enterRgb'));
+    return false;
+  }
+  storeTargetReading(target, parsed);
+  renderWizardColor();
+  return true;
 }
-calibH.addEventListener('input', updateFromSliders);
-calibS.addEventListener('input', updateFromSliders);
-calibL.addEventListener('input', updateFromSliders);
+
+function mixQueryForTarget(target) {
+  return Object.entries(target.weights)
+    .filter(([,w]) => +w > 0)
+    .map(([name, weight]) => `${PALETTE_INK_CODE[name]}:${Math.round(weight)}`)
+    .join(',');
+}
+
+calibInputMode.addEventListener('change', () => renderWizardColor());
+calibReading.addEventListener('change', applyCurrentReading);
+btnCalibUse.onclick = () => {
+  if (applyCurrentReading()) toast(tr('calib.readingApplied'));
+};
+btnCalibClear.onclick = () => {
+  clearTargetReading(currentTarget());
+  renderWizardColor();
+  toast(tr('calib.usingEstimate'));
+};
 
 btnCalibShow.onclick = async () => {
-  const name = PALETTE_ORDER[wizardStep];
-  const ink = PALETTE_INK_CODE[name];
+  const target = currentTarget();
   try {
     btnCalibShow.disabled = true;
-    calibActionHint.textContent = 'Sent. Watch the panel — refresh takes ~30 s.';
-    const r = await fetch('/api/calib-fill?ink=' + ink, {method: 'POST'});
+    calibActionHint.textContent = tr('calib.sent');
+    const mix = mixQueryForTarget(target);
+    const r = await fetch('/api/calib-mix?mix=' + mix, {method: 'POST'});
     if (!r.ok) throw new Error('HTTP ' + r.status);
   } catch (e) {
-    calibActionHint.textContent = 'Send failed: ' + e.message;
+    calibActionHint.textContent = tr('calib.sendFailed', {message: e.message});
   } finally {
     setTimeout(() => { btnCalibShow.disabled = false; }, 1500);
   }
 };
 
 btnCalibPrev.onclick = () => {
+  if (!applyCurrentReading()) return;
   if (wizardStep > 0) { wizardStep--; renderWizardChrome(); renderWizardColor(); }
 };
 btnCalibSkip.onclick = () => {
-  if (wizardStep < PALETTE_ORDER.length - 1) {
+  if (wizardStep < CALIB_TARGETS.length - 1) {
     wizardStep++; renderWizardChrome(); renderWizardColor();
   } else {
     saveAndClose(false);
   }
 };
 btnCalibNext.onclick = async () => {
-  if (wizardStep < PALETTE_ORDER.length - 1) {
+  if (!applyCurrentReading()) return;
+  if (wizardStep < CALIB_TARGETS.length - 1) {
     wizardStep++; renderWizardChrome(); renderWizardColor();
   } else {
     await saveAndClose(true);
@@ -2408,56 +4207,45 @@ btnCalibNext.onclick = async () => {
 };
 
 async function saveAndClose(notify) {
-  calib.palette = wizardWorking;
+  calib = ensureMixtureCalib(wizardWorking);
+  calib.mixtures.input = calibInputMode.value;
   try {
     const r = await api.setCalib(calib);
     if (!r.ok) throw new Error('save ' + r.status);
     pushPaletteToWasm();
-    if (notify) toast('Calibration saved');
+    schedulePreviewUpdate();
+    if (notify) toastKey('toast.calibrationSaved');
     calibSheet.classList.remove('is-open');
   } catch (e) {
-    toast('Save failed');
+    toastKey('toast.saveFailed');
     console.error(e);
   }
 }
 
 document.getElementById('row-open-calib').onclick = () => {
   if (!calib) calib = JSON.parse(JSON.stringify(CALIB_FALLBACK));
-  // Work on a copy so cancelling the sheet leaves NVS untouched.
-  wizardWorking = JSON.parse(JSON.stringify(calib.palette));
+  wizardWorking = ensureMixtureCalib(JSON.parse(JSON.stringify(calib)));
+  calibInputMode.value = wizardWorking.mixtures.input || 'rgb';
   wizardStep = 0;
   renderWizardChrome();
   renderWizardColor();
   calibSheet.classList.add('is-open');
 };
 
-// File picker → decode → openUpload
-filePicker.onchange = async e => {
-  const f = e.target.files[0];
-  if (!f) return;
-  try {
-    const bmp = await createImageBitmap(f);
-    openUpload(bmp);
-  } catch (err) {
-    toast('Cannot read image');
-    console.error(err);
-  }
-  filePicker.value = '';
-};
-document.getElementById('btn-upload').onclick = () => filePicker.click();
-
 // ---------- bootstrap ----------
-(async function start() {
+(function start() {
   refresh();
-  await loadCalib();
-  // Warm the WASM module in parallel so the first upload doesn't pay the
-  // 24 KB fetch + instantiation cost interactively.
-  loadWasm().then(() => {
-    pushPaletteToWasm();
-  }).catch(err => {
-    console.error('wasm load failed', err);
-    toast('Dither WASM failed — uploads will be slower');
-  });
+  const calibReady = loadCalib();
+  // Let /api/list and photo thumbnails win the first network slots; warm WASM
+  // after the gallery has had a moment to paint.
+  setTimeout(() => {
+    Promise.all([calibReady, loadWasm()]).then(() => {
+      pushPaletteToWasm();
+    }).catch(err => {
+      console.error('wasm load failed', err);
+      toastKey('toast.wasmFailed');
+    });
+  }, 1400);
 })();
 </script>
 </body>
