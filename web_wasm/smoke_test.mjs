@@ -30,6 +30,14 @@ e.wasm_init();
 if (!e.wasm_dither_e6 || !e.wasm_dither_e6_15x) {
   throw new Error('missing E6 dither exports');
 }
+if (!e.wasm_clear_mix_patches || !e.wasm_set_mix_patch_lab) {
+  throw new Error('missing mixed-patch calibration exports');
+}
+const labPtr = e.malloc(12);
+e.wasm_rgb_to_lab(112, 118, 123, labPtr);
+e.wasm_clear_mix_patches();
+e.wasm_set_mix_patch_lab(1, labPtr); // white_black_50 in CALIB_TARGETS order.
+e.free(labPtr);
 
 const rgbLen = W * H * 3;
 const rgbPtr = e.malloc(rgbLen);

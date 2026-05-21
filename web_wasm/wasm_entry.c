@@ -61,6 +61,69 @@ EXPORT void wasm_set_palette_lab(const float *lab18)
 {
     if (!lab18) return;
     memcpy(PALETTE_LAB, lab18, sizeof(float) * PALETTE_N * 3);
+    palette_mix_rebuild_model();
+}
+
+EXPORT void wasm_clear_mix_patches(void)
+{
+    palette_mix_clear();
+}
+
+EXPORT void wasm_set_mix_patch_lab(int patch_idx, const float *lab3)
+{
+    palette_mix_set_patch_lab(patch_idx, lab3);
+}
+
+// Tune the SCI→SCE specular-floor correction (k in 0..0.08).  Rebuilds
+// PALETTE_LAB and PALETTE_MIX_PATCHES from the colorimeter's measured Lab.
+// Pushed-from-JS palette/mix Lab values are overwritten by this rebuild —
+// callers that hold their own calibration should re-push after changing k.
+EXPORT void wasm_set_specular_floor(float k)
+{
+    palette_set_specular_floor(k);
+}
+
+EXPORT float wasm_get_specular_floor(void)
+{
+    return palette_get_specular_floor();
+}
+
+// Select the palette colorimetry mode (see palette_mode_t in palette.h).
+// 0 = legacy (rgb_to_lab roundtrip — pre-SCE behavior), 1..4 = SCE variants
+// at increasing specular-floor strength.  Rebuilds PALETTE_LAB and mix patches
+// from the bundled SCI source; user-calibrated values pushed earlier are
+// overwritten and the JS side must re-push if it holds overrides.
+EXPORT void wasm_set_palette_mode(int mode)
+{
+    palette_set_mode((palette_mode_t)mode);
+}
+
+EXPORT int wasm_get_palette_mode(void)
+{
+    return (int)palette_get_mode();
+}
+
+// 17³ sRGB→Lab gamut-map LUT. Built JS-side from the 34 calibration patches
+// (hue-binned panel-gamut envelope) and pushed once after calibration loads.
+// At runtime the dither replaces "rgb_to_lab_u8 + map_source_to_panel_lab"
+// with a single trilerp into this LUT — gives the picker its target Lab
+// already-compressed into the panel's measured gamut, with hue preserved.
+// Cleared on calibration drop or palette-only updates to keep state coherent.
+#define GAMUT_LUT_STEPS 17
+extern float gamut_lut_data[GAMUT_LUT_STEPS * GAMUT_LUT_STEPS * GAMUT_LUT_STEPS * 3];
+extern int   gamut_lut_loaded;
+
+EXPORT void wasm_set_gamut_lut(const float *lut)
+{
+    if (!lut) { gamut_lut_loaded = 0; return; }
+    memcpy(gamut_lut_data, lut,
+           sizeof(float) * GAMUT_LUT_STEPS * GAMUT_LUT_STEPS * GAMUT_LUT_STEPS * 3);
+    gamut_lut_loaded = 1;
+}
+
+EXPORT void wasm_clear_gamut_lut(void)
+{
+    gamut_lut_loaded = 0;
 }
 
 // Full pipeline: adjust → dither → packed 4bpp.

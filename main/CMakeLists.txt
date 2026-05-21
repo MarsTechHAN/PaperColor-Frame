@@ -4,6 +4,8 @@ set(WASM_SRC   "${CMAKE_CURRENT_SOURCE_DIR}/web/dither.wasm")
 set(WASM_GZ    "${CMAKE_CURRENT_BINARY_DIR}/dither.wasm.gz")
 set(I18N_SRC   "${CMAKE_CURRENT_SOURCE_DIR}/web/i18n.js")
 set(I18N_GZ    "${CMAKE_CURRENT_BINARY_DIR}/i18n.js.gz")
+set(WELCOME_ZH "${CMAKE_CURRENT_SOURCE_DIR}/assets/welcome_zh.bin")
+set(WELCOME_EN "${CMAKE_CURRENT_SOURCE_DIR}/assets/welcome_en.bin")
 
 idf_component_register(
     SRCS
@@ -27,6 +29,7 @@ idf_component_register(
         "status_led.c"
         "power_manager.c"
         "battery_overlay.c"
+        "welcome_overlay.c"
     INCLUDE_DIRS "."
     REQUIRES
         driver
@@ -47,7 +50,7 @@ idf_component_register(
         esp_http_server
         lwip
         nvs_flash
-    EMBED_FILES "${WEB_GZ}" "${WASM_GZ}" "${I18N_GZ}"
+    EMBED_FILES "${WEB_GZ}" "${WASM_GZ}" "${I18N_GZ}" "${WELCOME_ZH}" "${WELCOME_EN}"
 )
 
 # Build-time: gzip the web bundle so the firmware ships the compressed blob

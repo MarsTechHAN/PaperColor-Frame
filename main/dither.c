@@ -146,7 +146,16 @@ static inline float region_palette_bias(uint8_t reg, float L, int p)
         if (p == PIDX_WHITE) b -= 0.10f;
     }
     if (reg & REG_LIGHT) {
+        // On reflective E6, red/blue/green inks are *also* dark (L*≈30-42),
+        // so a stray colored dot in paper-white regions is nearly as
+        // conspicuous as a black one. Penalise all dark inks here — the
+        // L*-asymmetric block below covers smoothly-bright source pixels
+        // but REG_LIGHT triggers on the raw Y8 channel, which catches
+        // post-AE highlights that may still have residual saturation.
         if (p == PIDX_BLACK) b += 0.90f;
+        if (p == PIDX_RED)   b += 0.55f;
+        if (p == PIDX_BLUE)  b += 0.45f;
+        if (p == PIDX_GREEN) b += 0.20f;
     }
     if (reg & REG_DARK) {
         if (p == PIDX_WHITE) b += 0.35f;
@@ -161,7 +170,10 @@ static inline float region_palette_bias(uint8_t reg, float L, int p)
         if (k > 1.0f) k = 1.0f;
         if (reg & REG_FLAT) k *= 1.35f;
         if (p == PIDX_BLACK)  b += 0.95f * k;
-        if (p == PIDX_RED)    b += 0.62f * k;
+        // Red ink on paper white is the single most conspicuous wrong-dot
+        // in skin and sky highlights (panel-red L*≈36, so a red dot in an
+        // L*=60 highlight reads as a distinct red speck). Bump aggressively.
+        if (p == PIDX_RED)    b += 0.85f * k;
         if (p == PIDX_BLUE)   b += 0.55f * k;
         if (p == PIDX_GREEN)  b += 0.24f * k;
         if (p == PIDX_YELLOW) b -= 0.10f * k;
@@ -202,12 +214,97 @@ static inline void map_source_to_panel_lab(float *L, float *a, float *b)
     // Slight toe lift keeps shadow detail from collapsing into black ink.
     t = powf(t, 0.92f);
 
-    float neutral_a = ab + (aw - ab) * t;
-    float neutral_b = bb + (bw - bb) * t;
+    // Source chroma magnitude. Drives one targeted bend below; otherwise
+    // the chroma compression is the same 0.44× the dither was tuned
+    // against historically, which keeps enough out-of-gamut residual for
+    // error diffusion to halftone with.
+    const float src_a = *a, src_b = *b;
+    const float src_C = sqrtf(src_a * src_a + src_b * src_b);
 
-    *L = Lb + (Lw - Lb) * t;
-    *a = neutral_a + (*a * 0.44f);
-    *b = neutral_b + (*b * 0.44f);
+    // Surgical hue-preserving cusp bend: ONLY triggers for source pixels
+    // brighter than panel white (L* > Lw) AND saturated (C* > 20). This is
+    // the specific "bleach a vivid sunset red to paper white" failure
+    // mode — at L*>Lw the chroma squash alone lands the mapped point too
+    // close to panel WHITE (L*=Lw, C*=0) for the picker to choose RED.
+    // For everything else (skin, sky, mid-saturation, low-key) we don't
+    // touch L* — leave it linearly mapped into panel range so the dither
+    // has full freedom.
+    const float L_cusp = 40.0f;
+    float L_target_t = t;
+    if (*L > Lw && src_C > 20.0f) {
+        float overshoot = (*L - Lw) / (100.0f - Lw + 1e-3f);
+        if (overshoot > 1.0f) overshoot = 1.0f;
+        float satFactor = (src_C - 20.0f) / 40.0f;
+        if (satFactor > 1.0f) satFactor = 1.0f;
+        float pull = overshoot * satFactor * ((Lw - L_cusp) / (Lw - Lb));
+        L_target_t = t - pull;
+        if (L_target_t < 0.0f) L_target_t = 0.0f;
+    }
+
+    // 0.44× chroma squash matches the pre-2026 dither tuning. Stronger
+    // values look attractive in isolation but starve the error-diffusion
+    // residual that the halftone picker depends on, collapsing large
+    // regions into single inks (Spectra 6 + Stucki specifically degrades
+    // this way at scales >0.55).
+    const float chroma_scale = 0.44f;
+
+    float neutral_a = ab + (aw - ab) * L_target_t;
+    float neutral_b = bb + (bw - bb) * L_target_t;
+
+    *L = Lb + (Lw - Lb) * L_target_t;
+    *a = neutral_a + (src_a * chroma_scale);
+    *b = neutral_b + (src_b * chroma_scale);
+}
+
+// ------------------------------------------- 17³ gamut-map LUT (set from JS)
+// Built JS-side from the 34 calibration patches (panel-gamut hull envelope),
+// indexed by source sRGB, output is target Lab already-compressed into the
+// panel's measured gamut with hue preserved. Replaces rgb_to_lab + the
+// analytic map_source_to_panel_lab above with a single trilerp.
+#define GAMUT_LUT_STEPS 17
+float gamut_lut_data[GAMUT_LUT_STEPS * GAMUT_LUT_STEPS * GAMUT_LUT_STEPS * 3];
+int   gamut_lut_loaded = 0;
+
+static inline void gamut_lab_from_rgb(uint8_t r, uint8_t g, uint8_t b,
+                                      float *L, float *a_out, float *b_out)
+{
+    if (!gamut_lut_loaded) {
+        // Fallback: analytic path (still has the hue-preserving cusp bend).
+        rgb_to_lab_u8(r, g, b, L, a_out, b_out);
+        map_source_to_panel_lab(L, a_out, b_out);
+        return;
+    }
+    const float SF = (float)(GAMUT_LUT_STEPS - 1) / 255.0f;
+    const float fr = r * SF;
+    const float fg = g * SF;
+    const float fb = b * SF;
+    int ir = (int)fr; if (ir >= GAMUT_LUT_STEPS - 1) ir = GAMUT_LUT_STEPS - 2;
+    int ig = (int)fg; if (ig >= GAMUT_LUT_STEPS - 1) ig = GAMUT_LUT_STEPS - 2;
+    int ib = (int)fb; if (ib >= GAMUT_LUT_STEPS - 1) ib = GAMUT_LUT_STEPS - 2;
+    const float tr = fr - ir, tg = fg - ig, tb = fb - ib;
+
+    const int S = GAMUT_LUT_STEPS;
+    const int stride = S * S * 3;
+    const float *base000 = &gamut_lut_data[(ir    * S + ig    ) * S * 3 + ib * 3];
+    const float *base100 = base000 + stride;
+    const float *base010 = base000 + S * 3;
+    const float *base110 = base000 + stride + S * 3;
+    const float *base001 = base000 + 3;
+    const float *base101 = base100 + 3;
+    const float *base011 = base010 + 3;
+    const float *base111 = base110 + 3;
+
+    float out[3];
+    for (int i = 0; i < 3; i++) {
+        float v00 = base000[i] * (1.0f - tr) + base100[i] * tr;
+        float v01 = base001[i] * (1.0f - tr) + base101[i] * tr;
+        float v10 = base010[i] * (1.0f - tr) + base110[i] * tr;
+        float v11 = base011[i] * (1.0f - tr) + base111[i] * tr;
+        float v0  = v00 * (1.0f - tg) + v10 * tg;
+        float v1  = v01 * (1.0f - tg) + v11 * tg;
+        out[i]    = v0  * (1.0f - tb) + v1  * tb;
+    }
+    *L = out[0]; *a_out = out[1]; *b_out = out[2];
 }
 
 // ----------------------------------------------------------------- picker
@@ -268,7 +365,11 @@ static inline float e6_palette_bias(uint8_t reg, float L,
         float k = (float)(y - 112) / 88.0f;
         if (k > 1.0f) k = 1.0f;
         if (p == PIDX_BLACK)  bias += 1.20f * k;
-        if (p == PIDX_RED)    bias += 0.74f * k;
+        // Match the highlight-region RED bump in region_palette_bias —
+        // both code paths feed e6-mix dither, and asymmetric bumps here
+        // would leak red speckle into chroma<22 near-neutral highlights
+        // (faces, paper, snow).
+        if (p == PIDX_RED)    bias += 1.00f * k;
         if (p == PIDX_BLUE)   bias += 0.62f * k;
         if (p == PIDX_GREEN)  bias += 0.26f * k;
         if (p == PIDX_YELLOW) bias -= 0.14f * k;
@@ -296,6 +397,27 @@ static inline float e6_palette_bias(uint8_t reg, float L,
     }
 
     return bias;
+}
+
+static inline float e6_neighbour_mix_de(float L, float a, float b, int cand,
+                                        int left, int up, int up_left, int up_right)
+{
+    if (palette_mix_enabled_count() <= 0) return -1.0f;
+    float weights[PALETTE_N] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    float total = 4.0f;
+    weights[cand] += 4.0f;
+
+    if (left >= 0 && left < PALETTE_N)       { weights[left] += 2.0f; total += 2.0f; }
+    if (up >= 0 && up < PALETTE_N)           { weights[up] += 2.0f; total += 2.0f; }
+    if (up_left >= 0 && up_left < PALETTE_N) { weights[up_left] += 1.0f; total += 1.0f; }
+    if (up_right >= 0 && up_right < PALETTE_N) { weights[up_right] += 1.0f; total += 1.0f; }
+
+    float inv = 1.0f / total;
+    for (int i = 0; i < PALETTE_N; i++) weights[i] *= inv;
+
+    float mix_lab[3];
+    palette_mix_model_lab(weights, mix_lab);
+    return ciede2000(L, a, b, mix_lab[0], mix_lab[1], mix_lab[2]);
 }
 
 static inline float e6_screen_tiebreak(int x, int y, int p)
@@ -348,6 +470,8 @@ static inline int pick_palette_e6_mix(float L, float a, float b, uint8_t reg,
                 + same * cluster_scale
                 + e6_palette_bias(reg, L, r, g, bb, p)
                 + e6_screen_tiebreak(x, y, p);
+        float mix_de = e6_neighbour_mix_de(L, a, b, p, left, up, up_left, up_right);
+        if (mix_de >= 0.0f) d += (mix_de - raw[p]) * 0.34f;
         if (p == raw_best) d -= 0.08f;
         if (d < best_d) { best_d = d; best_idx = p; }
     }
@@ -469,11 +593,12 @@ static inline void stucki_diffuse(float *err_cur, float *err_nxt, float *err_nxt
 #define REFINE_RADIUS 2
 #define REFINE_ITERS  2
 
-static inline float lab_avg_error5(const float *target_lab, const uint8_t *idx,
-                                   int w, int h, int x, int y, int cand)
+static inline float optical_avg_error5(const float *target_lab, const uint8_t *idx,
+                                       int w, int h, int x, int y, int cand)
 {
     float tL = 0.0f, ta = 0.0f, tb = 0.0f;
     float oL = 0.0f, oa = 0.0f, ob = 0.0f;
+    float ink_weights[PALETTE_N] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
     float ws = 0.0f;
 
     for (int yy = y - REFINE_RADIUS; yy <= y + REFINE_RADIUS; yy++) {
@@ -486,17 +611,33 @@ static inline float lab_avg_error5(const float *target_lab, const uint8_t *idx,
             const float *tl = target_lab + ((size_t)yy * w + xx) * 3;
             int pi = (xx == x && yy == y) ? cand : idx[(size_t)yy * w + xx];
             tL += tl[0] * wt; ta += tl[1] * wt; tb += tl[2] * wt;
-            oL += PALETTE_LAB[pi][0] * wt;
-            oa += PALETTE_LAB[pi][1] * wt;
-            ob += PALETTE_LAB[pi][2] * wt;
+            ink_weights[pi] += wt;
             ws += wt;
         }
     }
 
     float inv = ws > 0.0f ? 1.0f / ws : 1.0f;
-    float dL = (tL - oL) * inv;
-    float da = (ta - oa) * inv;
-    float db = (tb - ob) * inv;
+    tL *= inv;
+    ta *= inv;
+    tb *= inv;
+
+    if (palette_mix_enabled_count() > 0) {
+        for (int i = 0; i < PALETTE_N; i++) ink_weights[i] *= inv;
+        float mix_lab[3];
+        palette_mix_model_lab(ink_weights, mix_lab);
+        oL = mix_lab[0]; oa = mix_lab[1]; ob = mix_lab[2];
+    } else {
+        for (int i = 0; i < PALETTE_N; i++) {
+            float wt = ink_weights[i] * inv;
+            oL += PALETTE_LAB[i][0] * wt;
+            oa += PALETTE_LAB[i][1] * wt;
+            ob += PALETTE_LAB[i][2] * wt;
+        }
+    }
+
+    float dL = tL - oL;
+    float da = ta - oa;
+    float db = tb - ob;
     return dL*dL * 1.20f + (da*da + db*db) * 0.58f;
 }
 
@@ -538,7 +679,7 @@ static void refine_indices_local(const float *target_lab, const uint8_t *region,
                 float improve_eps = (reg & REG_EDGE) ? 0.055f : 0.020f;
                 float max_pixel_loss = (reg & REG_EDGE) ? 4.0f : ((reg & REG_FLAT) ? 13.0f : 9.0f);
 
-                float best_score = lab_avg_error5(target_lab, idx, w, h, x, y, old)
+                float best_score = optical_avg_error5(target_lab, idx, w, h, x, y, old)
                                  + neighbour_cluster_cost(idx, w, h, x, y, old) * cluster_w
                                  + region_palette_bias(reg, tc[0], old) * 0.12f;
                 int best = old;
@@ -553,7 +694,7 @@ static void refine_indices_local(const float *target_lab, const uint8_t *region,
                     // neighbourhood-average improvement.
                     if (pixel_de > center_de + max_pixel_loss) continue;
 
-                    float score = lab_avg_error5(target_lab, idx, w, h, x, y, p)
+                    float score = optical_avg_error5(target_lab, idx, w, h, x, y, p)
                                 + neighbour_cluster_cost(idx, w, h, x, y, p) * cluster_w
                                 + region_palette_bias(reg, tc[0], p) * 0.12f
                                 + 0.045f;
@@ -747,8 +888,7 @@ int flat_fill_constructivist(const uint8_t *in_rgb888, int w, int h,
             float edge = source_edge_strength(in_rgb888, w, h, x, y);
             uint8_t reg = classify_region_rgb(src[0], src[1], src[2], edge);
             float L, a, b;
-            rgb_to_lab_u8(src[0], src[1], src[2], &L, &a, &b);
-            map_source_to_panel_lab(&L, &a, &b);
+            gamut_lab_from_rgb(src[0], src[1], src[2], &L, &a, &b);
             target_lab[pos * 3 + 0] = L;
             target_lab[pos * 3 + 1] = a;
             target_lab[pos * 3 + 2] = b;
@@ -822,8 +962,7 @@ static int dither_fs_core(const uint8_t *in_rgb888, int w, int h,
             region[(size_t)y * w + x] = reg;
 
             float L, a, b;
-            rgb_to_lab_u8(src[0], src[1], src[2], &L, &a, &b);
-            map_source_to_panel_lab(&L, &a, &b);
+            gamut_lab_from_rgb(src[0], src[1], src[2], &L, &a, &b);
             float *tl = target_lab + ((size_t)y * w + x) * 3;
             tl[0] = L; tl[1] = a; tl[2] = b;
 

@@ -20,14 +20,16 @@
 
 | 墨水 | 实测 RGB |
 | --- | --- |
-| BLACK | `[70, 71, 80]` |
-| WHITE | `[151, 161, 160]` |
-| YELLOW | `[163, 154, 69]` |
-| RED | `[118, 69, 70]` |
-| BLUE | `[60, 97, 134]` |
-| GREEN | `[77, 100, 76]` |
+| BLACK | `[72, 71, 82]` |
+| WHITE | `[151, 161, 161]` |
+| YELLOW | `[164, 154, 69]` |
+| RED | `[120, 70, 71]` |
+| BLUE | `[60, 99, 136]` |
+| GREEN | `[79, 103, 77]` |
 
-这些值是面板在用户测试光源和 PANTONE-LS C2019 条件下的外观近似。启动时通过 `palette_init()` 转换到 CIELAB，保存在 `PALETTE_LAB` 中；浏览器校准后会通过 `wasm_set_palette_lab()` 覆盖 WASM 内的 Lab palette。
+这些值来自 `PaperColor-Cali-Data-20260521.xlsx` 的 `Read from machine` 读数，是面板在用户测试光源和 PANTONE-LS C2019 条件下的外观近似。启动时通过 `palette_init()` 转换到 CIELAB，保存在 `PALETTE_LAB` 中；浏览器校准后会通过 `wasm_set_palette_lab()` 覆盖 WASM 内的 Lab palette。
+
+同一份表格还包含 28 个 mixed halftone patch。基于 34 个总采样点的 CIE 1931 xy 凸包估算，PaperColor 实测色域约为 sRGB xy 三角形面积的 `14.44%`；按 CIELAB `a*b*` 投影约为 `5.75%`。色域图和采样点明细保存在 `doc/papercolor_gamut_20260521.png`、`doc/papercolor_gamut_20260521.svg`、`doc/papercolor_gamut_samples_20260521.csv`。
 
 ## 为什么不用理想 RGB 匹配
 
@@ -335,8 +337,9 @@ E = 1.20 * mean_delta_L^2 + 0.58 * (mean_delta_a^2 + mean_delta_b^2)
 
 - `applyPanelPreviewOptics()`：让 dithered preview 更像实体 E6。
 - Auto scoring：用 optical luma 而不是只用单像素 palette RGB。
+- E6 Mix dither：通过 WASM `wasm_clear_mix_patches()` / `wasm_set_mix_patch_lab()` 把 mixed patch Lab 推入 C 层，让 picker 和 local refinement 直接按实测局部混色评分。
 
-核心 dither C ABI 目前仍使用 palette + heuristic bias，不直接接收 mixed patch 表；这是后续可继续优化的方向。
+如果没有任何 mixed patch 读数，C 层会回退到旧的六色 palette-only 局部平均；只要有读数，就使用 pair residual + semantic anchor 的轻量模型修正 local optical Lab。
 
 ## Auto ISP-like Pipeline
 
@@ -416,14 +419,15 @@ Dithered preview 使用最终 15x WASM quantization 的 raw indices，再用 cal
 
 因此当前算法更偏向感知约束：宁可局部平均稍差，也不允许高可见污染点破坏观感。
 
-### 为什么混色模型主要影响预览和 Auto
+### 为什么混色模型进入 dither，但仍保留可见性约束
 
-Mixed patch 数据可以很好地描述“色差仪看到的局部平均”，但 dither 的逐像素决策还需要考虑纹理、可见噪声、边缘污染和局部结构。当前策略是：
+Mixed patch 数据可以很好地描述“色差仪看到的局部平均”，因此现在不只用于预览和 Auto，也进入 E6 Mix 的实际 dither scoring：
 
-- dither C 核心使用实测 palette + E6 可见性 heuristic，保证稳定、快速、可解释。
-- preview / Auto 使用 mixed-patch optical model，保证用户看到和 Auto 评分更接近真实面板。
+- 初始 picker 会用已量化邻居 + 候选墨水估计一个小局部混色，并把它与目标 Lab 比较。
+- local refinement 的 5x5 平均不再只线性平均纯墨水 Lab，而是使用 measured pair residual 和 skin/foliage 等 anchor 修正后的 optical Lab。
+- 如果用户清空 mixed patch，模型自动回退到旧的 palette-only refinement。
 
-下一步如果要继续优化，可以把 mixed patch 拟合出的参数通过 WASM ABI 传入 C dither，让 picker 直接 scoring 局部 optical mix。
+仍然保留 `region_palette_bias()`、肤色/天空/绿植保护、edge-aware diffusion 和 cluster cost，因为“平均色更准”不等于“观感更好”：白底上的红/蓝/黑孤点即使平均误差小，也会破坏真实面板观感。
 
 ### 为什么不用完整 AI 模型
 

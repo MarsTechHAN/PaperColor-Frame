@@ -179,6 +179,8 @@ wasm = {
   free: exports.free,
   init: exports.wasm_init,
   setPalette: exports.wasm_set_palette_lab,
+  clearMix: exports.wasm_clear_mix_patches,
+  setMixPatch: exports.wasm_set_mix_patch_lab,
   dither: exports.wasm_dither,
   dither15x: exports.wasm_dither_15x,
   ditherE6: exports.wasm_dither_e6,
@@ -207,13 +209,17 @@ color_pipeline_init();
 palette_init();
 ```
 
-### Palette Calibration
+### Palette / Mix Calibration
 
 ```c
 EXPORT void wasm_set_palette_lab(const float *lab18)
+EXPORT void wasm_clear_mix_patches(void)
+EXPORT void wasm_set_mix_patch_lab(int patch_idx, const float *lab3)
 ```
 
 浏览器从 `/api/calib` 读取实测 palette RGB，再调用 WASM 的 `wasm_rgb_to_lab()` 转换成 Lab，最后通过 `wasm_set_palette_lab()` 写回 `PALETTE_LAB`。这样 JS 和 C 使用同一个 Lab 实现，避免色差漂移。
+
+Mixed patch 按 `CALIB_TARGETS` 中非 solid 项的顺序映射到 `PALETTE_MIX_PATCH_N=28`。`pushMixPatchesToWasm()` 会先清空 C 层 mixed model，再把已有的 mixed patch Lab 逐项写入；如果没有 mixed patch，dither 自动回退到旧 palette-only 局部平均。
 
 ### RGB to Lab Helper
 
@@ -255,7 +261,7 @@ enhance_eink_rgb888
 dither_e6_mix_fs / dither_e6_mix_fs_15x
 ```
 
-E6 Mix 是默认照片路径。它保留 Classic 的 Lab gamut mapping、Stucki diffusion 和 local refinement，但在 palette pick 中加入面板可见性、肤色/天空/绿植保护和更弱周期的 tie-break。
+E6 Mix 是默认照片路径。它保留 Classic 的 Lab gamut mapping、Stucki diffusion 和 local refinement，但在 palette pick 中加入面板可见性、肤色/天空/绿植保护和更弱周期的 tie-break。当前版本还会使用 mixed-patch calibration：picker 用已量化邻居估计候选局部混色，refinement 的 5x5 平均用 `palette_mix_model_lab()` 而不是纯墨水 Lab 线性平均。
 
 ### Russian Flat-fill
 
@@ -386,7 +392,15 @@ Tune 时如果找到 sidecar，会恢复 adjust、`mode` 和 `ditherMode`。
 - RGB：例如 `[151,161,160]`。
 - CMYK：例如 `[5%,0%,0%,36%]`，浏览器会转换到 RGB。
 
-`CALIB_TARGETS` 包含六个纯墨水和多个 mixed halftone patch。纯墨水读数更新 `palette`；mixed patch 更新 `mixtures.patches`。
+`CALIB_TARGETS` 包含六个纯墨水和 28 个 mixed halftone patch。纯墨水读数更新 `palette`；mixed patch 更新 `mixtures.patches`，并在 WASM dither 前推送到 `PALETTE_MIX_PATCHES`。默认 calibration 已内置 `PaperColor-Cali-Data-20260521.xlsx` 的 `Read from machine` 读数。
+
+这份测量还生成了色域分析产物：
+
+- `doc/papercolor_gamut_20260521.png`
+- `doc/papercolor_gamut_20260521.svg`
+- `doc/papercolor_gamut_samples_20260521.csv`
+
+当前估算 PaperColor 实测 CIE xy 色域约覆盖 sRGB 的 `14.44%`。
 
 ### Mixed Patch 显示
 
@@ -464,6 +478,8 @@ JPEG decode
 ```text
 _wasm_init
 _wasm_set_palette_lab
+_wasm_clear_mix_patches
+_wasm_set_mix_patch_lab
 _wasm_dither
 _wasm_dither_15x
 _wasm_dither_e6
@@ -556,7 +572,7 @@ Dither 使用 rolling error rows，而不是全图 error buffer：
 
 ### 修改 palette 后为什么要重新生成 Lab
 
-`PALETTE_LAB` 是从 `PALETTE_RGB_MEASURED` 初始化的。如果改变实测 RGB，需要重新运行程序或 WASM init。浏览器端 palette 通过 `/api/calib` 推送到 WASM。
+`PALETTE_LAB` 是从 `PALETTE_RGB_MEASURED` 初始化的。如果改变实测 RGB，需要重新运行程序或 WASM init。浏览器端 palette 通过 `/api/calib` 推送到 WASM。mixed patch 读数同样需要重新推送，因为 pair residual 是相对当前 `PALETTE_LAB` 计算的。
 
 ### 为什么 preview 和最终输出现在更一致
 

@@ -211,6 +211,7 @@ int pm1_init(void)
     }
 
     pm1_set_rgb_power(false);
+    pm1_set_boost_power(false);
 
     ESP_LOGI(TAG, "rails: PYG0(EPD)=0 PYG3(SD)=1 "
                   "(mode=0x%02x out=0x%02x drv=0x%02x)", mode, out, drv);

@@ -116,6 +116,45 @@ static int json_get_string_field(const char *json, const char *key,
     return 1;
 }
 
+
+static int json_get_bool_field(const char *json, const char *key, bool *out)
+{
+    if (!json || !key || !out) return -1;
+    char needle[48];
+    int nn = snprintf(needle, sizeof needle, "\"%s\"", key);
+    if (nn < 0 || nn >= (int)sizeof needle) return -1;
+    const char *p = strstr(json, needle);
+    if (!p) return 0;
+    p += nn;
+    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+    if (*p++ != ':') return -1;
+    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+    if (strncmp(p, "true", 4) == 0) { *out = true; return 1; }
+    if (strncmp(p, "false", 5) == 0) { *out = false; return 1; }
+    if (*p == '1') { *out = true; return 1; }
+    if (*p == '0') { *out = false; return 1; }
+    return -1;
+}
+
+static void json_escape_string(char *out, size_t out_sz, const char *in)
+{
+    if (!out || out_sz == 0) return;
+    size_t off = 0;
+    if (!in) in = "";
+    for (const unsigned char *p = (const unsigned char *)in; *p; p++) {
+        unsigned char c = *p;
+        if (c == '"' || c == '\\') {
+            if (off + 2 >= out_sz) break;
+            out[off++] = '\\';
+            out[off++] = (char)c;
+        } else if (c >= 32) {
+            if (off + 1 >= out_sz) break;
+            out[off++] = (char)c;
+        }
+    }
+    out[off] = 0;
+}
+
 // -------------------------------------------------------------------- routes
 
 // GET / — serve the gzipped UI bundle.
@@ -429,25 +468,41 @@ static esp_err_t send_config_json_with_version(httpd_req_t *req)
 {
     const esp_app_desc_t *app = esp_app_get_description();
     const char *ap_password = config_get_wifi_ap_password();
-    char body[384];
+    const char *sta_password = config_get_wifi_sta_password();
+    char ap_ssid[80];
+    char sta_ssid[96];
+    char fw_version[96];
+    char build_time_raw[64];
+    char build_time[80];
+    json_escape_string(ap_ssid, sizeof ap_ssid, config_get_wifi_ap_ssid());
+    json_escape_string(sta_ssid, sizeof sta_ssid, config_get_wifi_sta_ssid());
+    json_escape_string(fw_version, sizeof fw_version, app ? app->version : "PaperColor Frame");
+    snprintf(build_time_raw, sizeof build_time_raw, "%s %s", app ? app->date : "", app ? app->time : "");
+    json_escape_string(build_time, sizeof build_time, build_time_raw);
+
+    char body[768];
     snprintf(body, sizeof body,
              "{\"loop_interval_s\":%u,"
              "\"wifi_idle_sleep_s\":%u,"
-             "\"button_sleep_s\":%u,"
-             "\"status_led_brightness\":%u,"
+             "\"wifi_mode\":\"%s\","
              "\"wifi_ap_ssid\":\"%s\","
              "\"wifi_ap_password_set\":%s,"
+             "\"wifi_sta_ssid\":\"%s\","
+             "\"wifi_sta_password_set\":%s,"
+             "\"mdns_host\":\"papercolor.local\","
+             "\"battery_icon_enabled\":%s,"
              "\"fw_version\":\"%s\","
-             "\"build_time\":\"%s %s\"}",
+             "\"build_time\":\"%s\"}",
              (unsigned)config_get_loop_interval_s(),
              (unsigned)config_get_wifi_idle_sleep_s(),
-             (unsigned)config_get_button_sleep_s(),
-             (unsigned)config_get_status_led_brightness(),
-             config_get_wifi_ap_ssid(),
+             config_get_wifi_mode_string(),
+             ap_ssid,
              (ap_password && ap_password[0]) ? "true" : "false",
-             app ? app->version : "PaperColor Frame",
-             app ? app->date : "",
-             app ? app->time : "");
+             sta_ssid,
+             (sta_password && sta_password[0]) ? "true" : "false",
+             config_get_battery_icon_enabled() ? "true" : "false",
+             fw_version,
+             build_time);
     return send_json(req, body);
 }
 
@@ -459,7 +514,7 @@ static esp_err_t h_config(httpd_req_t *req)
         return send_config_json_with_version(req);
     }
     // POST: read full body (small JSON patch), parse known fields.
-    char buf[256];
+    char buf[512];
     int n = (req->content_len < (int)sizeof buf - 1)
               ? req->content_len : (int)sizeof buf - 1;
     int got = 0;
@@ -472,16 +527,13 @@ static esp_err_t h_config(httpd_req_t *req)
         got += r;
     }
     buf[got] = 0;
-    // Cheap partial-JSON parse: every setting is an integer field and callers
-    // may POST only the value they changed.
+    // Cheap partial-JSON parse: callers may POST only the value changed.
     const struct {
         const char *key;
         int (*set)(uint32_t);
     } fields[] = {
         {"loop_interval_s", config_set_loop_interval_s},
         {"wifi_idle_sleep_s", config_set_wifi_idle_sleep_s},
-        {"button_sleep_s", config_set_button_sleep_s},
-        {"status_led_brightness", config_set_status_led_brightness},
     };
     for (size_t i = 0; i < sizeof(fields) / sizeof(fields[0]); i++) {
         const char *p = strstr(buf, fields[i].key);
@@ -491,13 +543,51 @@ static esp_err_t h_config(httpd_req_t *req)
         uint32_t v = (uint32_t)strtoul(p + 1, NULL, 10);
         fields[i].set(v);
     }
+    bool battery_enabled = false;
+    int bool_rc = json_get_bool_field(buf, "battery_icon_enabled", &battery_enabled);
+    if (bool_rc < 0) {
+        return send_text(req, "400 Bad Request", "text/plain", "bad battery flag");
+    }
+    if (bool_rc > 0 && config_set_battery_icon_enabled(battery_enabled) != 0) {
+        return send_text(req, "500 Internal Server Error", "text/plain", "store failed");
+    }
+
+    char wifi_mode[16];
+    int mode_rc = json_get_string_field(buf, "wifi_mode", wifi_mode, sizeof wifi_mode);
+    if (mode_rc < 0) {
+        return send_text(req, "400 Bad Request", "text/plain", "bad Wi-Fi mode");
+    }
+    if (mode_rc > 0 && config_set_wifi_mode_string(wifi_mode) != 0) {
+        return send_text(req, "400 Bad Request", "text/plain", "Wi-Fi mode must be ap, sta, or sta_ap");
+    }
+
+    char sta_ssid[CONFIG_WIFI_SSID_MAX_LEN + 1];
+    int ssid_rc = json_get_string_field(buf, "wifi_sta_ssid", sta_ssid, sizeof sta_ssid);
+    if (ssid_rc < 0) {
+        return send_text(req, "400 Bad Request", "text/plain", "bad STA SSID");
+    }
+    if (ssid_rc > 0 && config_set_wifi_sta_ssid(sta_ssid) != 0) {
+        return send_text(req, "400 Bad Request", "text/plain", "SSID must be 0-32 printable ASCII characters");
+    }
+
     char wifi_pass[CONFIG_WIFI_AP_PASSWORD_MAX_LEN + 1];
     int pass_rc = json_get_string_field(buf, "wifi_ap_password",
                                         wifi_pass, sizeof wifi_pass);
     if (pass_rc < 0) {
-        return send_text(req, "400 Bad Request", "text/plain", "bad password");
+        return send_text(req, "400 Bad Request", "text/plain", "bad AP password");
     }
     if (pass_rc > 0 && config_set_wifi_ap_password(wifi_pass) != 0) {
+        return send_text(req, "400 Bad Request", "text/plain",
+                         "password must be empty or 8-63 ASCII characters");
+    }
+
+    char sta_pass[CONFIG_WIFI_STA_PASSWORD_MAX_LEN + 1];
+    int sta_pass_rc = json_get_string_field(buf, "wifi_sta_password",
+                                            sta_pass, sizeof sta_pass);
+    if (sta_pass_rc < 0) {
+        return send_text(req, "400 Bad Request", "text/plain", "bad STA password");
+    }
+    if (sta_pass_rc > 0 && config_set_wifi_sta_password(sta_pass) != 0) {
         return send_text(req, "400 Bad Request", "text/plain",
                          "password must be empty or 8-63 ASCII characters");
     }

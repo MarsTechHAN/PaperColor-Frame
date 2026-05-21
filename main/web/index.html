@@ -836,6 +836,68 @@ input[type=file] { display: none; }
   margin: 13px 0 0;
   accent-color: var(--ink);
 }
+.setting-card input[type=range].setting-range-native {
+  display: none;
+}
+.setting-drag-range {
+  position: relative;
+  height: 50px;
+  margin-top: 9px;
+  touch-action: none;
+  user-select: none;
+}
+.setting-drag-range__track {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 21px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(41,25,15,0.12);
+  box-shadow: var(--soft-inset);
+  overflow: hidden;
+}
+.setting-drag-range__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(65,113,71,0.80), rgba(244,191,69,0.86));
+}
+.setting-drag-range__thumb {
+  position: absolute;
+  left: 0%;
+  top: 25px;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  transform: translate(-50%, -50%);
+  touch-action: none;
+  cursor: grab;
+}
+.setting-drag-range__thumb::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(41,25,15,0.16);
+  border-radius: 999px;
+  background: #fff8eb;
+  box-shadow: 0 8px 18px rgba(41,25,15,0.22), inset 0 1px 0 rgba(255,255,255,0.85);
+  transform: translate(-50%, -50%);
+}
+.setting-drag-range.is-dragging .setting-drag-range__thumb {
+  cursor: grabbing;
+}
+.setting-drag-range.is-dragging .setting-drag-range__thumb::after,
+.setting-drag-range:focus-visible .setting-drag-range__thumb::after {
+  outline: 3px solid rgba(225,91,66,0.28);
+  outline-offset: 3px;
+}
 .setting-select {
   appearance: none;
   -webkit-appearance: none;
@@ -870,6 +932,47 @@ input[type=file] { display: none; }
 }
 .setting-text-input::placeholder {
   color: var(--ink-4);
+}
+
+.setting-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 58px;
+  height: 34px;
+  margin-top: 4px;
+}
+.setting-toggle input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+.setting-toggle__track {
+  width: 100%;
+  height: 100%;
+  border: 1px solid rgba(41,25,15,0.16);
+  border-radius: 999px;
+  background: rgba(41,25,15,0.12);
+  box-shadow: var(--soft-inset);
+  transition: background 160ms ease;
+}
+.setting-toggle__track::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 5px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #fff8eb;
+  box-shadow: 0 4px 10px rgba(41,25,15,0.24);
+  transition: transform 160ms ease;
+}
+.setting-toggle input:checked + .setting-toggle__track {
+  background: rgba(65,113,71,0.54);
+}
+.setting-toggle input:checked + .setting-toggle__track::after {
+  transform: translateX(24px);
 }
 .setting-card__button {
   display: inline-flex;
@@ -996,6 +1099,59 @@ input[type=file] { display: none; }
   accent-color: var(--ink);
 }
 .adjust-grid button { margin-top: 10px; }
+.adjust-experimental {
+  margin-top: 16px;
+  padding: 10px 12px;
+  border: 1px dashed rgba(41,25,15,0.22);
+  border-radius: 14px;
+  background: rgba(255,248,234,0.45);
+}
+.adjust-experimental > summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: var(--t-meta);
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 2px 0;
+}
+.adjust-experimental > summary::-webkit-details-marker { display: none; }
+.adjust-experimental > summary::after {
+  content: "  +";
+  color: var(--red);
+}
+.adjust-experimental[open] > summary::after { content: "  -"; }
+.adjust-experimental__hint {
+  margin: 8px 0 0;
+  color: var(--ink-3);
+  font-size: var(--t-meta);
+  line-height: 1.45;
+}
+.adjust-experimental__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  color: var(--ink);
+  font-size: var(--t-meta);
+  font-weight: 800;
+}
+.adjust-experimental__row select {
+  font: inherit;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(41,25,15,0.18);
+  background: rgba(255,255,255,0.85);
+  min-width: 50%;
+}
+.adjust-experimental__caption {
+  margin: 8px 0 0;
+  color: var(--ink-3);
+  font-size: var(--t-small, 12px);
+  line-height: 1.4;
+}
 .stage-tools {
   display: flex;
   align-items: stretch;
@@ -1550,6 +1706,21 @@ input[type=file] { display: none; }
           <div class="slider__inner"><div class="slider__track"></div><div class="slider__fill"></div><div class="slider__thumb"></div></div>
         </div>
         <button id="btn-reset-adjust" type="button" data-i18n="adjust.reset">Reset to calibration default</button>
+        <details class="adjust-experimental" id="adjust-experimental">
+          <summary data-i18n="adjust.experimentalTitle">Experimental</summary>
+          <div class="adjust-experimental__hint" data-i18n="adjust.experimentalHint">Opt-in pipeline tweaks. Defaults are off.</div>
+          <label class="adjust-experimental__row">
+            <span data-i18n="adjust.colorimetryMode">Color calibration mode</span>
+            <select id="colorimetry-mode-select">
+              <option value="legacy"      data-i18n="adjust.colorimetry.legacy">Legacy (default)</option>
+              <option value="sce-off"     data-i18n="adjust.colorimetry.sceOff">SCE off (CSV Lab direct)</option>
+              <option value="sce-subtle"  data-i18n="adjust.colorimetry.sceSubtle">SCE subtle</option>
+              <option value="sce-default" data-i18n="adjust.colorimetry.sceDefault">SCE default</option>
+              <option value="sce-strong"  data-i18n="adjust.colorimetry.sceStrong">SCE strong</option>
+            </select>
+          </label>
+          <p class="adjust-experimental__caption" data-i18n="adjust.colorimetryHint">SCE subtracts the AG glass first-surface reflection.</p>
+        </details>
       </div>
     </section>
   </div>
@@ -1586,7 +1757,7 @@ input[type=file] { display: none; }
     <section class="settings-hero">
       <p class="settings-hero__eyebrow" data-i18n="settings.title">Settings</p>
       <h2 class="settings-hero__title" data-i18n="settings.introTitle">Frame settings</h2>
-      <p class="settings-hero__text" data-i18n="settings.introText">Set playback, sleep, image processing, calibration, firmware info, and language.</p>
+      <p class="settings-hero__text" data-i18n="settings.introText">Set playback, power, network, image processing, calibration, firmware, and language.</p>
     </section>
 
     <section class="setting-group">
@@ -1597,9 +1768,9 @@ input[type=file] { display: none; }
             <div class="setting-card__label" data-i18n="settings.loop">Auto refresh interval</div>
             <div class="setting-card__hint" data-i18n="settings.loopHint">When looping, move to the next photo after this long.</div>
           </div>
-          <div class="setting-card__value" id="loop-value">— s</div>
+          <div class="setting-card__value" id="loop-value">—</div>
         </div>
-        <input id="loop-range" type="range" min="30" max="3600" step="30" value="600">
+        <input id="loop-range" type="range" min="0" max="7" step="1" value="1">
       </div>
     </section>
 
@@ -1608,18 +1779,35 @@ input[type=file] { display: none; }
       <div class="setting-card">
         <div class="setting-card__main">
           <div class="setting-card__text">
-            <div class="setting-card__label" data-i18n="settings.wifiSleep">Sleep after phone disconnects</div>
-            <div class="setting-card__hint" data-i18n="settings.wifiSleepHint">If no phone is connected to frame Wi-Fi, sleep after this delay.</div>
+            <div class="setting-card__label" data-i18n="settings.wifiSleep">Sleep after Wi-Fi disconnects</div>
+            <div class="setting-card__hint" data-i18n="settings.wifiSleepHint">If no phone or STA network is connected, sleep after this delay.</div>
           </div>
           <div class="setting-card__value" id="wifi-sleep-value">—</div>
         </div>
-        <input id="wifi-sleep-range" type="range" min="30" max="86400" step="30" value="300">
+        <input id="wifi-sleep-range" type="range" min="0" max="4" step="1" value="2">
+      </div>
+    </section>
+
+    <section class="setting-group">
+      <h3 class="setting-group__title" data-i18n="settings.network">Network</h3>
+      <div class="setting-card">
+        <div class="setting-card__main">
+          <div class="setting-card__text">
+            <div class="setting-card__label" data-i18n="settings.wifiMode">Wi-Fi mode</div>
+            <div class="setting-card__hint" data-i18n="settings.wifiModeHint">AP is the built-in hotspot. STA joins your router.</div>
+          </div>
+        </div>
+        <select id="wifi-mode-select" class="setting-select">
+          <option value="ap" data-i18n="settings.wifiModeAp">AP hotspot</option>
+          <option value="sta_ap" data-i18n="settings.wifiModeStaAp">STA + AP</option>
+          <option value="sta" data-i18n="settings.wifiModeSta">STA only</option>
+        </select>
       </div>
       <div class="setting-card">
         <div class="setting-card__main">
           <div class="setting-card__text">
             <div class="setting-card__label" data-i18n="settings.wifiSsid">Frame Wi-Fi</div>
-            <div class="setting-card__hint" data-i18n="settings.wifiSsidHint">Connect your phone to this network before opening the web UI.</div>
+            <div class="setting-card__hint" data-i18n="settings.wifiSsidHint">Built-in hotspot name used in AP and STA+AP modes.</div>
           </div>
           <div class="setting-card__value" id="wifi-ssid-value">PaperColor</div>
         </div>
@@ -1627,23 +1815,34 @@ input[type=file] { display: none; }
       <div class="setting-card">
         <div class="setting-card__main">
           <div class="setting-card__text">
-            <div class="setting-card__label" data-i18n="settings.wifiPassword">Wi-Fi password</div>
-            <div class="setting-card__hint" data-i18n="settings.wifiPasswordHint">Leave empty for an open hotspot. Use 8-63 characters to protect it after the next restart.</div>
+            <div class="setting-card__label" data-i18n="settings.wifiPassword">AP password</div>
+            <div class="setting-card__hint" data-i18n="settings.wifiPasswordHint">Leave empty for an open hotspot. Use 8-63 characters to protect AP mode.</div>
           </div>
           <div class="setting-card__value" id="wifi-password-value" data-i18n="settings.wifiOpen">Open</div>
         </div>
         <input id="wifi-password-input" class="setting-text-input" type="password" maxlength="63" autocomplete="new-password" data-i18n-placeholder="settings.wifiPasswordPlaceholder" placeholder="Empty = open">
-        <button id="btn-save-wifi-password" class="setting-card__button" type="button" data-i18n="settings.saveWifiPassword">Save Wi-Fi</button>
+        <button id="btn-save-wifi-password" class="setting-card__button" type="button" data-i18n="settings.saveWifiPassword">Save AP password</button>
       </div>
       <div class="setting-card">
         <div class="setting-card__main">
           <div class="setting-card__text">
-            <div class="setting-card__label" data-i18n="settings.buttonSleep">Sleep after button press</div>
-            <div class="setting-card__hint" data-i18n="settings.buttonSleepHint">After a physical-button refresh, wait this long before sleeping.</div>
+            <div class="setting-card__label" data-i18n="settings.wifiStaSsid">Home Wi-Fi SSID</div>
+            <div class="setting-card__hint" data-i18n="settings.wifiStaSsidHint">Network name the frame joins in STA and STA+AP modes.</div>
           </div>
-          <div class="setting-card__value" id="button-sleep-value">—</div>
+          <div class="setting-card__value" id="wifi-sta-password-value" data-i18n="settings.wifiOpen">Open</div>
         </div>
-        <input id="button-sleep-range" type="range" min="1" max="60" step="1" value="3">
+        <input id="wifi-sta-ssid-input" class="setting-text-input" type="text" maxlength="32" autocomplete="off" data-i18n-placeholder="settings.wifiStaSsidPlaceholder" placeholder="Router Wi-Fi name">
+        <input id="wifi-sta-password-input" class="setting-text-input" type="password" maxlength="63" autocomplete="new-password" data-i18n-placeholder="settings.wifiStaPasswordPlaceholder" placeholder="Router password">
+        <button id="btn-save-sta-wifi" class="setting-card__button" type="button" data-i18n="settings.saveStaWifi">Save STA settings</button>
+      </div>
+      <div class="setting-card">
+        <div class="setting-card__main">
+          <div class="setting-card__text">
+            <div class="setting-card__label" data-i18n="settings.mdns">Network address</div>
+            <div class="setting-card__hint" data-i18n="settings.mdnsHint">In STA mode, open this address from the same router network.</div>
+          </div>
+          <div class="setting-card__value" id="mdns-value">papercolor.local</div>
+        </div>
       </div>
     </section>
 
@@ -1652,12 +1851,15 @@ input[type=file] { display: none; }
       <div class="setting-card">
         <div class="setting-card__main">
           <div class="setting-card__text">
-            <div class="setting-card__label" data-i18n="settings.ledBrightness">Status light</div>
-            <div class="setting-card__hint" data-i18n="settings.ledBrightnessHint">Set to 0 to turn the status light off.</div>
+            <div class="setting-card__label" data-i18n="settings.batteryIcon">Battery icon</div>
+            <div class="setting-card__hint" data-i18n="settings.batteryIconHint">Show a small battery indicator on photos.</div>
           </div>
-          <div class="setting-card__value" id="led-brightness-value">—</div>
+          <div class="setting-card__value" id="battery-icon-value" data-i18n="settings.on">On</div>
         </div>
-        <input id="led-brightness-range" type="range" min="0" max="80" step="1" value="24">
+        <label class="setting-toggle" for="battery-icon-toggle">
+          <input id="battery-icon-toggle" type="checkbox" checked>
+          <span class="setting-toggle__track"></span>
+        </label>
       </div>
       <div class="setting-card setting-card--action" id="row-open-calib">
         <div class="setting-card__text">
@@ -1888,6 +2090,14 @@ async function loadWasm() {
     free:    exports.free,
     init:    exports.wasm_init,
     setPalette: exports.wasm_set_palette_lab,
+    clearMix:  exports.wasm_clear_mix_patches,
+    setMixPatch: exports.wasm_set_mix_patch_lab,
+    setGamutLut:   exports.wasm_set_gamut_lut,
+    clearGamutLut: exports.wasm_clear_gamut_lut,
+    setSpecularFloor: exports.wasm_set_specular_floor,
+    getSpecularFloor: exports.wasm_get_specular_floor,
+    setPaletteMode:   exports.wasm_set_palette_mode,
+    getPaletteMode:   exports.wasm_get_palette_mode,
     dither:    exports.wasm_dither,
     dither15x: exports.wasm_dither_15x,
     ditherE6:  exports.wasm_dither_e6,
@@ -1911,18 +2121,394 @@ async function loadWasm() {
 // stale-LAB / wrong-LAB hazard.
 let calib = null;
 const CALIB_FALLBACK = {
-  palette: {
-    black:  {rgb:[ 70, 71, 80]},
-    white:  {rgb:[151,161,160]},
-    yellow: {rgb:[163,154, 69]},
-    red:    {rgb:[118, 69, 70]},
-    blue:   {rgb:[ 60, 97,134]},
-    green:  {rgb:[ 77,100, 76]},
+  "palette": {
+    "black": {
+      "rgb": [
+        72,
+        71,
+        82
+      ]
+    },
+    "white": {
+      "rgb": [
+        151,
+        161,
+        161
+      ]
+    },
+    "yellow": {
+      "rgb": [
+        164,
+        154,
+        69
+      ]
+    },
+    "red": {
+      "rgb": [
+        120,
+        70,
+        71
+      ]
+    },
+    "blue": {
+      "rgb": [
+        60,
+        99,
+        136
+      ]
+    },
+    "green": {
+      "rgb": [
+        79,
+        103,
+        77
+      ]
+    }
   },
-  adjust: {brightness:0, exposure:0, contrast:106, saturation:136, vibrance:64, gamma:96, temperature:106, tint:99, smoothness:10, sharpen:34, vignette:14},
-  auto: {exposureBias:-33, temperatureBias:0},
-  pipeline: {ditherMode:'e6-mix'},
+  "adjust": {
+    "brightness": 0,
+    "exposure": 0,
+    "contrast": 106,
+    "saturation": 136,
+    "vibrance": 64,
+    "gamma": 96,
+    "temperature": 106,
+    "tint": 99,
+    "smoothness": 10,
+    "sharpen": 34,
+    "vignette": 14
+  },
+  "auto": {
+    "exposureBias": -33,
+    "temperatureBias": 0
+  },
+  "pipeline": {
+    "ditherMode": "e6-mix",
+    "colorimetryMode": "legacy"
+  },
+  "mixtures": {
+    "version": 2,
+    "input": "rgb",
+    "source": "PaperColor-Cali-Data-20260521.xlsx / Read from machine",
+    "patches": {
+      "white_black_25": {
+        "rgb": [
+          130,
+          138,
+          142
+        ]
+      },
+      "white_black_50": {
+        "rgb": [
+          112,
+          118,
+          123
+        ]
+      },
+      "white_black_75": {
+        "rgb": [
+          93,
+          96,
+          104
+        ]
+      },
+      "white_yellow_25": {
+        "rgb": [
+          155,
+          159,
+          141
+        ]
+      },
+      "white_yellow_50": {
+        "rgb": [
+          158,
+          157,
+          121
+        ]
+      },
+      "white_yellow_75": {
+        "rgb": [
+          161,
+          156,
+          97
+        ]
+      },
+      "white_red_25": {
+        "rgb": [
+          143,
+          142,
+          141
+        ]
+      },
+      "white_red_50": {
+        "rgb": [
+          136,
+          122,
+          120
+        ]
+      },
+      "white_red_75": {
+        "rgb": [
+          129,
+          99,
+          97
+        ]
+      },
+      "white_blue_25": {
+        "rgb": [
+          133,
+          148,
+          155
+        ]
+      },
+      "white_blue_50": {
+        "rgb": [
+          113,
+          134,
+          149
+        ]
+      },
+      "white_blue_75": {
+        "rgb": [
+          90,
+          118,
+          143
+        ]
+      },
+      "white_green_25": {
+        "rgb": [
+          141,
+          151,
+          140
+        ]
+      },
+      "white_green_50": {
+        "rgb": [
+          127,
+          140,
+          121
+        ]
+      },
+      "white_green_75": {
+        "rgb": [
+          128,
+          140,
+          121
+        ]
+      },
+      "black_yellow_50": {
+        "rgb": [
+          126,
+          118,
+          81
+        ]
+      },
+      "black_red_50": {
+        "rgb": [
+          96,
+          72,
+          78
+        ]
+      },
+      "black_blue_50": {
+        "rgb": [
+          70,
+          81,
+          104
+        ]
+      },
+      "black_green_50": {
+        "rgb": [
+          80,
+          93,
+          95
+        ]
+      },
+      "yellow_red_50": {
+        "rgb": [
+          146,
+          122,
+          72
+        ]
+      },
+      "yellow_blue_50": {
+        "rgb": [
+          125,
+          132,
+          111
+        ]
+      },
+      "yellow_green_50": {
+        "rgb": [
+          132,
+          137,
+          79
+        ]
+      },
+      "red_blue_50": {
+        "rgb": [
+          95,
+          84,
+          106
+        ]
+      },
+      "red_green_50": {
+        "rgb": [
+          103,
+          96,
+          81
+        ]
+      },
+      "blue_green_50": {
+        "rgb": [
+          73,
+          107,
+          118
+        ]
+      },
+      "skin_wyr": {
+        "rgb": [
+          151,
+          153,
+          136
+        ]
+      },
+      "sky_wb": {
+        "rgb": [
+          132,
+          147,
+          156
+        ]
+      },
+      "foliage_gyk": {
+        "rgb": [
+          108,
+          119,
+          87
+        ]
+      }
+    }
+  }
 };
+
+// Measured CIE Lab (D65/2°, d/8, SCI, AG glass) from
+// doc/papercolor_gamut_samples_20260521.csv columns L,a,b.
+// These are the spreadsheet's primary measurements — more precise than the
+// 8-bit sRGB triplets in CALIB_FALLBACK, which were a projection of these
+// same Lab values for the calibration wizard UI. Used by pushPaletteToWasm
+// when the user has not overridden RGB, so the WASM dither sees the
+// colorimeter's raw chroma signal rather than the roundtripped 8-bit version.
+const CALIB_FALLBACK_LAB = {
+  palette: {
+    black:  [30.6245,   2.9592,  -6.3928],
+    white:  [65.4689,  -3.5446,  -1.2256],
+    yellow: [62.8726,  -7.5112,  45.0810],
+    red:    [35.6534,  21.5614,   8.6294],
+    blue:   [40.6722,  -2.3424, -24.7103],
+    green:  [41.0541, -14.5846,  11.8314],
+  },
+  mixtures: {
+    patches: {
+      white_black_25:  [56.9539,  -2.0868,  -3.1425],
+      white_black_50:  [49.2911,  -1.1860,  -3.5216],
+      white_black_75:  [40.7228,   0.6005,  -4.9443],
+      white_yellow_25: [64.7142,  -4.7611,   8.9077],
+      white_yellow_50: [63.9693,  -5.7496,  19.0268],
+      white_yellow_75: [63.5225,  -7.1535,  31.5428],
+      white_red_25:    [59.0749,   0.1740,   0.6608],
+      white_red_50:    [52.4087,   5.0014,   3.0486],
+      white_red_75:    [44.8779,  11.7784,   5.7991],
+      white_blue_25:   [60.3667,  -3.8540,  -5.5092],
+      white_blue_50:   [54.7933,  -4.0356, -10.5278],
+      white_blue_75:   [48.4020,  -3.5382, -16.8375],
+      white_green_25:  [61.3851,  -5.7520,   4.5580],
+      white_green_50:  [56.7313,  -8.4632,   8.5644],
+      white_green_75:  [56.8072,  -8.0864,   8.6826],
+      black_yellow_50: [49.4804,  -2.9364,  21.5270],
+      black_red_50:    [33.2901,  11.2822,   0.3916],
+      black_blue_50:   [34.3676,   1.7119, -14.7123],
+      black_green_50:  [38.4812,  -4.5337,  -2.8393],
+      yellow_red_50:   [52.3967,   2.5027,  30.6955],
+      yellow_blue_50:  [54.0378,  -6.6008,  10.4774],
+      yellow_green_50: [55.4429, -11.1799,  30.4319],
+      red_blue_50:     [37.5069,   9.2089, -10.9820],
+      red_green_50:    [40.9665,   0.0332,   9.5879],
+      blue_green_50:   [43.1215,  -9.1633, -10.0191],
+      skin_wyr:        [62.6252,  -3.8607,   8.6937],
+      sky_wb:          [60.0445,  -3.4165,  -6.5637],
+      foliage_gyk:     [48.3480, -10.1889,  16.2807],
+    },
+  },
+};
+
+// SCI → SCE specular-floor subtraction in XYZ. Mirrors lab_apply_sce in
+// main/palette.c — must stay in sync. AG glass + d/8 SCI bakes ~4% Fresnel
+// reflection into every reading; subtracting it in XYZ recovers the diffuse
+// (SCE) appearance the eye sees. k default 0.04 ≈ D65 reflection at crown
+// glass; the C side exposes wasm_set_specular_floor() for A/B tuning and
+// JS reads back via wasm.getSpecularFloor.
+const D65_Xn = 0.95047, D65_Yn = 1.00000, D65_Zn = 1.08883;
+const SPECULAR_FLOOR_K_DEFAULT = 0.04;
+
+function _labFinv(t) {
+  const t3 = t * t * t;
+  return t3 > 0.008856 ? t3 : (t - 16/116) / 7.787;
+}
+
+function labApplySCE(lab, k) {
+  if (k === undefined) k = SPECULAR_FLOOR_K_DEFAULT;
+  const fy = (lab[0] + 16) / 116;
+  const fx = lab[1] / 500 + fy;
+  const fz = fy - lab[2] / 200;
+  let X = D65_Xn * _labFinv(fx);
+  let Y = D65_Yn * _labFinv(fy);
+  let Z = D65_Zn * _labFinv(fz);
+  X -= k * D65_Xn;
+  Y -= k * D65_Yn;
+  Z -= k * D65_Zn;
+  const fX = 0.0005 * D65_Xn, fY = 0.0005 * D65_Yn, fZ = 0.0005 * D65_Zn;
+  if (X < fX) X = fX;
+  if (Y < fY) Y = fY;
+  if (Z < fZ) Z = fZ;
+  // Reuse _labF from the srgbToLab block below. It is defined later in the
+  // file (hoisted function), so referencing it here is safe.
+  const fx2 = _labF(X / D65_Xn), fy2 = _labF(Y / D65_Yn), fz2 = _labF(Z / D65_Zn);
+  return [116 * fy2 - 16, 500 * (fx2 - fy2), 200 * (fy2 - fz2)];
+}
+
+function currentSpecularFloorK() {
+  return (wasm && wasm.getSpecularFloor) ? wasm.getSpecularFloor() : SPECULAR_FLOOR_K_DEFAULT;
+}
+
+// Pick the SCI Lab for one palette name. Prefer the spreadsheet's measured
+// Lab (CALIB_FALLBACK_LAB) when the user has stuck with factory RGB; fall
+// back to srgbToLab(userRgb) when the user actually re-calibrated. Either
+// way, the caller applies labApplySCE() before pushing to the dither.
+function _paletteSciLabFor(name) {
+  const userRgb = calib && calib.palette && calib.palette[name] && calib.palette[name].rgb;
+  const fallbackRgb = CALIB_FALLBACK.palette[name] && CALIB_FALLBACK.palette[name].rgb;
+  if (userRgb && fallbackRgb &&
+      (userRgb[0] !== fallbackRgb[0] || userRgb[1] !== fallbackRgb[1] || userRgb[2] !== fallbackRgb[2])) {
+    return srgbToLab(userRgb[0]|0, userRgb[1]|0, userRgb[2]|0);
+  }
+  const factoryLab = CALIB_FALLBACK_LAB.palette[name];
+  return factoryLab ? factoryLab.slice() : srgbToLab(fallbackRgb[0]|0, fallbackRgb[1]|0, fallbackRgb[2]|0);
+}
+
+function _mixPatchSciLabFor(targetId) {
+  const userRgb = calib && calib.mixtures && calib.mixtures.patches
+                  && calib.mixtures.patches[targetId] && calib.mixtures.patches[targetId].rgb;
+  const fallbackRgb = CALIB_FALLBACK.mixtures.patches[targetId]
+                      && CALIB_FALLBACK.mixtures.patches[targetId].rgb;
+  if (userRgb && fallbackRgb &&
+      (userRgb[0] !== fallbackRgb[0] || userRgb[1] !== fallbackRgb[1] || userRgb[2] !== fallbackRgb[2])) {
+    return srgbToLab(userRgb[0]|0, userRgb[1]|0, userRgb[2]|0);
+  }
+  const factoryLab = CALIB_FALLBACK_LAB.mixtures.patches[targetId];
+  if (factoryLab) return factoryLab.slice();
+  if (fallbackRgb) return srgbToLab(fallbackRgb[0]|0, fallbackRgb[1]|0, fallbackRgb[2]|0);
+  return null;
+}
 
 function normalizeDitherMode(mode) {
   return mode === 'classic' ? 'classic' : 'e6-mix';
@@ -1937,7 +2523,24 @@ function ensurePipelineConfig(c) {
   out.auto.temperatureBias = Math.round(clampNum(+out.auto.temperatureBias, -20, 20));
   out.pipeline = out.pipeline || {};
   out.pipeline.ditherMode = normalizeDitherMode(out.pipeline.ditherMode);
+  out.pipeline.colorimetryMode = normalizeColorimetryMode(out.pipeline.colorimetryMode);
   return out;
+}
+
+// Colorimetry mode keys mirror palette_mode_t in main/palette.h.  The
+// "legacy" default reproduces the pre-2026-05 pipeline bit-exact; the
+// "sce-*" variants are scaffolded as Experimental and opt-in from the
+// Adjust panel.  See lab_apply_sce in palette.c for the math.
+const COLORIMETRY_MODE_KEYS = ['legacy', 'sce-off', 'sce-subtle', 'sce-default', 'sce-strong'];
+const COLORIMETRY_MODE_TO_INT = {
+  'legacy': 0, 'sce-off': 1, 'sce-subtle': 2, 'sce-default': 3, 'sce-strong': 4,
+};
+const COLORIMETRY_MODE_K = {
+  'legacy': 0, 'sce-off': 0, 'sce-subtle': 0.02, 'sce-default': 0.04, 'sce-strong': 0.06,
+};
+
+function normalizeColorimetryMode(mode) {
+  return COLORIMETRY_MODE_KEYS.includes(mode) ? mode : 'legacy';
 }
 
 function migrateCalibAdjustDefaults(c) {
@@ -1945,6 +2548,48 @@ function migrateCalibAdjustDefaults(c) {
   if (+c.adjust.saturation === 106 && (c.adjust.vibrance == null || +c.adjust.vibrance === 24)) {
     c.adjust.saturation = CALIB_FALLBACK.adjust.saturation;
     c.adjust.vibrance = CALIB_FALLBACK.adjust.vibrance;
+  }
+  return c;
+}
+
+function paletteMatchesRgbSet(c, rgbSet) {
+  if (!c || !c.palette) return false;
+  return PALETTE_ORDER.every(name => {
+    const got = c.palette[name] && c.palette[name].rgb;
+    const want = rgbSet[name] && rgbSet[name].rgb;
+    return Array.isArray(got) && Array.isArray(want)
+        && got.length >= 3
+        && got[0] === want[0] && got[1] === want[1] && got[2] === want[2];
+  });
+}
+
+function migrateCalibColorimeterDefaults(c) {
+  const previousFactoryPalette = {
+    black:  {rgb:[ 70, 71, 80]},
+    white:  {rgb:[151,161,160]},
+    yellow: {rgb:[163,154, 69]},
+    red:    {rgb:[118, 69, 70]},
+    blue:   {rgb:[ 60, 97,134]},
+    green:  {rgb:[ 77,100, 76]},
+  };
+  const matchesPrevious = paletteMatchesRgbSet(c, previousFactoryPalette);
+  const matchesCurrent = paletteMatchesRgbSet(c, CALIB_FALLBACK.palette);
+  const patchCount = c && c.mixtures && c.mixtures.patches
+    ? Object.keys(c.mixtures.patches).length
+    : 0;
+  if (matchesPrevious) {
+    c.palette = JSON.parse(JSON.stringify(CALIB_FALLBACK.palette));
+  }
+  if (matchesPrevious || matchesCurrent) {
+    const fallbackMix = JSON.parse(JSON.stringify(CALIB_FALLBACK.mixtures));
+    if (!c.mixtures || patchCount === 0) {
+      c.mixtures = fallbackMix;
+    } else if (patchCount < Object.keys(fallbackMix.patches).length) {
+      c.mixtures.version = fallbackMix.version;
+      c.mixtures.input = c.mixtures.input || fallbackMix.input;
+      c.mixtures.source = c.mixtures.source || fallbackMix.source;
+      c.mixtures.patches = Object.assign({}, fallbackMix.patches, c.mixtures.patches || {});
+    }
   }
   return c;
 }
@@ -1959,6 +2604,7 @@ async function loadCalib() {
   if (!calib || !calib.palette || !calib.adjust) calib = JSON.parse(JSON.stringify(CALIB_FALLBACK));
   calib = ensurePipelineConfig(calib);
   calib = migrateCalibAdjustDefaults(calib);
+  calib = migrateCalibColorimeterDefaults(calib);
   calib = ensureMixtureCalib(calib);
   ditherMode = normalizeDitherMode(calib.pipeline && calib.pipeline.ditherMode);
   // Strip any stored `lab` — derived from `rgb` exclusively from now on.
@@ -1968,29 +2614,229 @@ async function loadCalib() {
   return calib;
 }
 
-// Push the calibrated palette LAB values into the WASM module so the
+// Push the calibrated palette Lab values into the WASM module so the
 // CIEDE2000 distance metric uses panel-measured colours.
-// LAB is computed from RGB by the WASM's own rgb_to_lab_u8 — the same
-// function the dither runs internally — so the targets and the source
-// pixels use a consistent colour space.
+//
+// Two paths gated by calib.pipeline.colorimetryMode (default 'legacy'):
+//   1. LEGACY — bit-exact pre-2026-05 behavior.  Uses the WASM's own
+//      wasm_rgb_to_lab on calib.palette[name].rgb so the targets match the
+//      function the dither runs internally (no JS/C floating-point drift).
+//   2. SCE_*  — experimental.  Treats the colorimeter's readings as SCI
+//      (AG glass first-surface specular included) and subtracts a constant
+//      achromatic floor in XYZ to approximate SCE (in-use) Lab.  See
+//      labApplySCE and COLORIMETRY_MODE_K.
 function pushPaletteToWasm() {
   if (!wasm || !calib) return;
-  const rgbToLab = wasm.exports.wasm_rgb_to_lab;
+  const mode = normalizeColorimetryMode(calib.pipeline && calib.pipeline.colorimetryMode);
+  if (wasm.setPaletteMode) wasm.setPaletteMode(COLORIMETRY_MODE_TO_INT[mode] | 0);
   const lab18 = new Float32Array(18);
-  const tmpPtr = wasm.malloc(12);
-  const tmp = new Float32Array(wasm.memory.buffer, tmpPtr, 3);
-  PALETTE_ORDER.forEach((name, i) => {
-    const [r,g,b] = calib.palette[name].rgb;
-    rgbToLab(r|0, g|0, b|0, tmpPtr);
-    lab18[i*3 + 0] = tmp[0];
-    lab18[i*3 + 1] = tmp[1];
-    lab18[i*3 + 2] = tmp[2];
-  });
-  wasm.free(tmpPtr);
+  if (mode === 'legacy') {
+    const rgbToLab = wasm.exports.wasm_rgb_to_lab;
+    const tmpPtr = wasm.malloc(12);
+    const tmp = new Float32Array(wasm.memory.buffer, tmpPtr, 3);
+    PALETTE_ORDER.forEach((name, i) => {
+      const [r,g,b] = calib.palette[name].rgb;
+      rgbToLab(r|0, g|0, b|0, tmpPtr);
+      lab18[i*3 + 0] = tmp[0];
+      lab18[i*3 + 1] = tmp[1];
+      lab18[i*3 + 2] = tmp[2];
+    });
+    wasm.free(tmpPtr);
+  } else {
+    const k = COLORIMETRY_MODE_K[mode];
+    PALETTE_ORDER.forEach((name, i) => {
+      const sceLab = labApplySCE(_paletteSciLabFor(name), k);
+      lab18[i*3 + 0] = sceLab[0];
+      lab18[i*3 + 1] = sceLab[1];
+      lab18[i*3 + 2] = sceLab[2];
+    });
+  }
   const ptr = wasm.malloc(lab18.byteLength);
   new Float32Array(wasm.memory.buffer, ptr, 18).set(lab18);
   wasm.setPalette(ptr);
   wasm.free(ptr);
+  pushMixPatchesToWasm();
+}
+
+function pushMixPatchesToWasm() {
+  if (!wasm || !calib || !wasm.clearMix || !wasm.setMixPatch) return;
+  const mode = normalizeColorimetryMode(calib.pipeline && calib.pipeline.colorimetryMode);
+  const tmpPtr = wasm.malloc(12);
+  const tmp = new Float32Array(wasm.memory.buffer, tmpPtr, 3);
+  let mixIdx = 0;
+  wasm.clearMix();
+  if (mode === 'legacy') {
+    const rgbToLab = wasm.exports.wasm_rgb_to_lab;
+    for (const target of CALIB_TARGETS) {
+      if (target.solid) continue;
+      const entry = measuredPatchEntry(target, calib);
+      if (entry && Array.isArray(entry.rgb)) {
+        const [r, g, b] = entry.rgb;
+        rgbToLab(r|0, g|0, b|0, tmpPtr);
+        wasm.setMixPatch(mixIdx, tmpPtr);
+      }
+      mixIdx++;
+    }
+  } else {
+    const k = COLORIMETRY_MODE_K[mode];
+    for (const target of CALIB_TARGETS) {
+      if (target.solid) continue;
+      const sciLab = _mixPatchSciLabFor(target.id);
+      if (sciLab) {
+        const sceLab = labApplySCE(sciLab, k);
+        tmp[0] = sceLab[0]; tmp[1] = sceLab[1]; tmp[2] = sceLab[2];
+        wasm.setMixPatch(mixIdx, tmpPtr);
+      }
+      mixIdx++;
+    }
+  }
+  wasm.free(tmpPtr);
+  // NOTE on the 17³ LUT: pushing a pre-compressed sRGB→Lab gamut-map LUT
+  // strips the dither of its error-diffusion signal — when source Lab is
+  // already squeezed into panel gamut, the picker collapses to solid-ink
+  // blocks because there's no out-of-gamut residual to spread as halftone
+  // variety. We keep `buildGamutMapLut` / `pushGamutLutToWasm` available
+  // for future experimentation, but DO NOT push by default; the dither
+  // uses the analytic `map_source_to_panel_lab` (with the hue-preserving
+  // cusp bend for very-saturated highlights) which preserves enough
+  // chroma signal for halftoning. Also clear any LUT a previous session
+  // may have set in this WASM instance.
+  if (wasm.clearGamutLut) wasm.clearGamutLut();
+}
+
+// Build a 17×17×17 sRGB→Lab gamut-map LUT from the 34 calibration patches.
+// Output entries are *target* Lab values for the dither: source pixels are
+// compressed into the panel's measured gamut hull (panel-Lab extents +
+// hue-binned chroma envelope), preserving hue. Replaces the analytic
+// map_source_to_panel_lab in dither.c when pushed via wasm_set_gamut_lut.
+function buildGamutMapLut() {
+  const STEPS = 17;
+  // Pull every measured Lab point — 6 primaries + 28 mixtures = up to 34.
+  // Used for lMin/lMax (panel L* range). Cusp lookup itself uses only the
+  // primary inks (see inkCusps below).
+  const labs = [];
+  for (const name of PALETTE_ORDER) {
+    const rgb = (calib && calib.palette && calib.palette[name] && calib.palette[name].rgb)
+             || CALIB_FALLBACK.palette[name].rgb;
+    labs.push(srgbToLab(rgb[0], rgb[1], rgb[2]));
+  }
+  const mixSrc = (calib && calib.mixtures && calib.mixtures.patches) || CALIB_FALLBACK.mixtures.patches;
+  for (const name in mixSrc) {
+    const rgb = mixSrc[name] && mixSrc[name].rgb;
+    if (Array.isArray(rgb)) labs.push(srgbToLab(rgb[0], rgb[1], rgb[2]));
+  }
+  // Panel L* range from the hull. Anything outside [lMin, lMax] in the
+  // *output* would be wasted (dither can't render it).
+  let lMin = Infinity, lMax = -Infinity;
+  for (const lab of labs) {
+    if (lab[0] < lMin) lMin = lab[0];
+    if (lab[0] > lMax) lMax = lab[0];
+  }
+  // Cusp model uses ALL measured patches with non-trivial chroma — 6
+  // primary inks PLUS the 28 mixtures from the calibration spreadsheet —
+  // because mixtures fill the inter-primary hue gaps the panel can still
+  // reach via halftone (e.g., red_blue_50 covers hue ≈ 310° where neither
+  // pure red nor pure blue lives). For each source hue we take the patch
+  // with the highest measured C* within a ±25° window: that patch is the
+  // panel's achievable cusp at that hue, and we use its L* as the anchor
+  // lightness — so output Lab points are physically reachable by the
+  // dither, not extrapolated.
+  const allCusps = [];
+  function addCuspsFromMap(palette) {
+    for (const name in palette) {
+      const rgb = palette[name] && palette[name].rgb;
+      if (!Array.isArray(rgb)) continue;
+      const lab = srgbToLab(rgb[0], rgb[1], rgb[2]);
+      const C = Math.hypot(lab[1], lab[2]);
+      if (C < 5) continue;   // skip near-neutrals
+      const h = (Math.atan2(lab[2], lab[1]) + 2 * Math.PI) % (2 * Math.PI);
+      allCusps.push({ L: lab[0], C, h, name });
+    }
+  }
+  addCuspsFromMap((calib && calib.palette) || CALIB_FALLBACK.palette);
+  addCuspsFromMap((calib && calib.mixtures && calib.mixtures.patches)
+                  || CALIB_FALLBACK.mixtures.patches);
+
+  const lMidFallback = (lMin + lMax) * 0.5;
+  const HUE_WINDOW = Math.PI * 25 / 180;   // ±25°
+  const cuspAt = (h) => {
+    if (allCusps.length === 0) return { C: 0, L: lMidFallback };
+    let best = null, bestC = 0;
+    for (const c of allCusps) {
+      let dh = Math.abs(h - c.h);
+      if (dh > Math.PI) dh = 2 * Math.PI - dh;
+      if (dh > HUE_WINDOW) continue;
+      if (c.C > bestC) { bestC = c.C; best = c; }
+    }
+    if (!best) return { C: 0, L: lMidFallback };
+    return { C: best.C, L: best.L };
+  };
+
+  const lut = new Float32Array(STEPS * STEPS * STEPS * 3);
+  // Per-axis index→sRGB conversion. (STEPS-1)/255 → 16/255 ≈ 0.0627.
+  const scale = 255 / (STEPS - 1);
+  for (let ri = 0; ri < STEPS; ri++) {
+    const R = Math.round(ri * scale);
+    for (let gi = 0; gi < STEPS; gi++) {
+      const G = Math.round(gi * scale);
+      for (let bi = 0; bi < STEPS; bi++) {
+        const B = Math.round(bi * scale);
+        const lab = srgbToLab(R, G, B);
+        const Lin = lab[0], ain = lab[1], bin_ = lab[2];
+        const Cin = Math.hypot(ain, bin_);
+        const hin = Cin > 0.5 ? (Math.atan2(bin_, ain) + 2*Math.PI) % (2*Math.PI) : 0;
+        const cusp = cuspAt(hin);
+
+        // ---- Lightness compression (hue-biased) ----
+        // Unsaturated pixels: linear remap of source L* (0..100) into
+        // panel range [lMin, lMax].
+        // Saturated pixels: bias output L* toward the cusp L* at this hue
+        // (panel can't sustain both brightness and saturation, so for vivid
+        // sources we relinquish brightness in favour of chroma fidelity).
+        const tLn = Math.max(0, Math.min(1, Lin / 100));
+        const Lneutral = lMin + (lMax - lMin) * tLn;
+        const cuspW = Cin > 5 ? Math.min(1, (Cin - 5) / Math.max(1, cusp.C - 5)) : 0;
+        const Lout = Lneutral + (cusp.L - Lneutral) * cuspW * 0.55;
+
+        // ---- Chroma compression (gamut-hull aware) ----
+        // Max achievable C* at *output* L*, derived from the cusp: the
+        // panel's chroma envelope tapers linearly from cusp.C at cusp.L
+        // toward 0 at both L*=lMin and L*=lMax. Soft-knee compresses
+        // source C* into [0, cMaxAtL] preserving low chroma 1:1.
+        const lRangeUp   = Math.max(1, lMax - cusp.L);
+        const lRangeDown = Math.max(1, cusp.L - lMin);
+        const lDist = Lout > cusp.L ? (Lout - cusp.L) / lRangeUp
+                                     : (cusp.L - Lout) / lRangeDown;
+        const cMaxAtL = Math.max(0, cusp.C * (1 - lDist));
+        const knee = cMaxAtL * 0.80;
+        let Cout = Cin;
+        if (Cin > knee) {
+          Cout = knee + (Cin - knee) / (1 + (Cin - knee) / Math.max(1, cMaxAtL * 0.5));
+          if (Cout > cMaxAtL) Cout = cMaxAtL;
+        }
+
+        // Reconstruct a*, b* preserving hue.
+        const aOut = Cin > 0.5 ? Math.cos(hin) * Cout : 0;
+        const bOut = Cin > 0.5 ? Math.sin(hin) * Cout : 0;
+
+        const k = ((ri * STEPS + gi) * STEPS + bi) * 3;
+        lut[k] = Lout; lut[k+1] = aOut; lut[k+2] = bOut;
+      }
+    }
+  }
+  return lut;
+}
+
+function pushGamutLutToWasm() {
+  if (!wasm || !calib || !wasm.setGamutLut) return;
+  const lut = buildGamutMapLut();
+  const ptr = wasm.malloc(lut.byteLength);
+  new Float32Array(wasm.memory.buffer, ptr, lut.length).set(lut);
+  wasm.setGamutLut(ptr);
+  wasm.free(ptr);
+  // Also flush the JS-side gamut cache so re-computations pick up new
+  // calibration without a page reload.
+  _gamutCacheKey = null;
 }
 
 // ---------- toast ----------
@@ -2201,34 +3047,181 @@ const loopRange = document.getElementById('loop-range');
 const loopValue = document.getElementById('loop-value');
 const wifiSleepRange = document.getElementById('wifi-sleep-range');
 const wifiSleepValue = document.getElementById('wifi-sleep-value');
+const wifiModeSelect = document.getElementById('wifi-mode-select');
 const wifiSsidValue = document.getElementById('wifi-ssid-value');
 const wifiPasswordValue = document.getElementById('wifi-password-value');
 const wifiPasswordInput = document.getElementById('wifi-password-input');
 const saveWifiPasswordBtn = document.getElementById('btn-save-wifi-password');
-const buttonSleepRange = document.getElementById('button-sleep-range');
-const buttonSleepValue = document.getElementById('button-sleep-value');
-const ledBrightnessRange = document.getElementById('led-brightness-range');
-const ledBrightnessValue = document.getElementById('led-brightness-value');
+const wifiStaSsidInput = document.getElementById('wifi-sta-ssid-input');
+const wifiStaPasswordInput = document.getElementById('wifi-sta-password-input');
+const wifiStaPasswordValue = document.getElementById('wifi-sta-password-value');
+const saveStaWifiBtn = document.getElementById('btn-save-sta-wifi');
+const mdnsValue = document.getElementById('mdns-value');
+const batteryIconToggle = document.getElementById('battery-icon-toggle');
+const batteryIconValue = document.getElementById('battery-icon-value');
 const ditherModeSelect = document.getElementById('dither-mode-select');
+const colorimetryModeSelect = document.getElementById('colorimetry-mode-select');
 const autoAeRange = document.getElementById('auto-ae-range');
 const autoAeValue = document.getElementById('auto-ae-value');
 const autoTempRange = document.getElementById('auto-temp-range');
 const autoTempValue = document.getElementById('auto-temp-value');
 const firmwareVersionEl = document.getElementById('firmware-version');
 const firmwareBuildTimeEl = document.getElementById('firmware-build-time');
+let wifiModeText = 'ap';
 let wifiSsidText = 'PaperColor';
 let wifiPasswordSet = false;
+let wifiStaSsidText = '';
+let wifiStaPasswordSet = false;
+let mdnsHostText = 'papercolor.local';
+let batteryIconEnabled = true;
 let firmwareVersionText = 'PaperColor Frame';
 let firmwareBuildTimeText = '';
+const LOOP_INTERVAL_SECONDS = [300, 600, 900, 1800, 3600, 7200, 21600, 0];
+const WIFI_SLEEP_SECONDS = [30, 60, 300, 600, 900];
+
+function clamp01(v) {
+  return Math.max(0, Math.min(1, v));
+}
+function dispatchRangeEvent(input, type) {
+  input.dispatchEvent(new Event(type, {bubbles: true}));
+}
+function initSettingDragRange(input) {
+  if (!input || input.dataset.dragRangeReady === '1') return null;
+  input.dataset.dragRangeReady = '1';
+  input.classList.add('setting-range-native');
+  input.tabIndex = -1;
+
+  const widget = document.createElement('div');
+  widget.className = 'setting-drag-range';
+  widget.tabIndex = 0;
+  widget.setAttribute('role', 'slider');
+  const label = input.closest('.setting-card')?.querySelector('.setting-card__label');
+  if (label) widget.setAttribute('aria-label', label.textContent.trim());
+  widget.innerHTML = '<div class="setting-drag-range__track"><div class="setting-drag-range__fill"></div></div><div class="setting-drag-range__thumb" aria-hidden="true"></div>';
+  input.after(widget);
+
+  const track = widget.querySelector('.setting-drag-range__track');
+  const fill = widget.querySelector('.setting-drag-range__fill');
+  const thumb = widget.querySelector('.setting-drag-range__thumb');
+
+  function min() { return Number(input.min || 0); }
+  function max() { return Number(input.max || 100); }
+  function step() { return Number(input.step || 1) || 1; }
+  function precision() {
+    const s = String(input.step || '1');
+    const dot = s.indexOf('.');
+    return dot >= 0 ? s.length - dot - 1 : 0;
+  }
+  function snap(v) {
+    const lo = min(), hi = max(), st = step();
+    const snapped = lo + Math.round((v - lo) / st) * st;
+    return +Math.max(lo, Math.min(hi, snapped)).toFixed(precision());
+  }
+  function ratio() {
+    const lo = min(), hi = max();
+    return hi > lo ? clamp01((Number(input.value) - lo) / (hi - lo)) : 0;
+  }
+  function paint() {
+    const pct = ratio() * 100;
+    fill.style.width = pct + '%';
+    thumb.style.left = pct + '%';
+    widget.setAttribute('aria-valuemin', input.min || '0');
+    widget.setAttribute('aria-valuemax', input.max || '100');
+    widget.setAttribute('aria-valuenow', input.value);
+  }
+  function setValue(v, emitInput) {
+    const before = input.value;
+    input.value = String(snap(v));
+    paint();
+    const changed = input.value !== before;
+    if (emitInput && changed) dispatchRangeEvent(input, 'input');
+    return changed;
+  }
+  function valueFromCenterX(centerX) {
+    const rect = track.getBoundingClientRect();
+    const r = rect.width > 0 ? clamp01((centerX - rect.left) / rect.width) : ratio();
+    return min() + r * (max() - min());
+  }
+
+  let dragging = false;
+  let changedDuringDrag = false;
+  let grabOffset = 0;
+
+  thumb.addEventListener('pointerdown', e => {
+    const rect = track.getBoundingClientRect();
+    grabOffset = e.clientX - (rect.left + ratio() * rect.width);
+    dragging = true;
+    changedDuringDrag = false;
+    widget.classList.add('is-dragging');
+    thumb.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  thumb.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    changedDuringDrag = setValue(valueFromCenterX(e.clientX - grabOffset), true) || changedDuringDrag;
+    e.preventDefault();
+  });
+  const finishDrag = e => {
+    if (!dragging) return;
+    dragging = false;
+    widget.classList.remove('is-dragging');
+    try { thumb.releasePointerCapture(e.pointerId); } catch {}
+    if (changedDuringDrag) dispatchRangeEvent(input, 'change');
+    e.preventDefault();
+  };
+  thumb.addEventListener('pointerup', finishDrag);
+  thumb.addEventListener('pointercancel', finishDrag);
+
+  widget.addEventListener('keydown', e => {
+    let next = Number(input.value);
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') next -= step();
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') next += step();
+    else if (e.key === 'Home') next = min();
+    else if (e.key === 'End') next = max();
+    else return;
+    if (setValue(next, true)) dispatchRangeEvent(input, 'change');
+    e.preventDefault();
+  });
+
+  paint();
+  return {input, paint};
+}
+const settingRangeWidgets = [loopRange, wifiSleepRange, autoAeRange, autoTempRange]
+  .map(initSettingDragRange)
+  .filter(Boolean);
+function syncSettingRangeWidgets() {
+  for (const widget of settingRangeWidgets) widget.paint();
+}
 
 function fmtInterval(s) {
   s = Math.round(+s || 0);
+  if (s === 0) return tr('settings.never');
   if (s < 60) return tr('time.seconds', {value: s});
   if (s < 3600) return tr('time.minutes', {value: (s / 60).toFixed(s % 60 === 0 ? 0 : 1)});
   return tr('time.hours', {value: (s / 3600).toFixed(s % 3600 === 0 ? 0 : 1)});
 }
-function fmtBrightness(v) {
-  return (+v === 0) ? tr('settings.off') : String(v);
+function nearestOptionIndex(options, seconds, zeroExact = false) {
+  seconds = Math.round(+seconds || 0);
+  if (zeroExact && seconds === 0) {
+    const zeroIdx = options.indexOf(0);
+    return zeroIdx >= 0 ? zeroIdx : 0;
+  }
+  let best = 0;
+  let bestDelta = Infinity;
+  for (let i = 0; i < options.length; i++) {
+    if (zeroExact && options[i] === 0) continue;
+    const delta = Math.abs(options[i] - seconds);
+    if (delta < bestDelta) {
+      best = i;
+      bestDelta = delta;
+    }
+  }
+  return best;
+}
+function optionSeconds(options, range) {
+  const idx = Math.max(0, Math.min(options.length - 1, Math.round(+range.value || 0)));
+  return options[idx];
 }
 function fmtEvBias(v) {
   v = Math.round(+v || 0);
@@ -2246,21 +3239,27 @@ function fmtSigned(v) {
 }
 function applyConfigToControls(cfg) {
   if (!cfg || typeof cfg !== 'object') return;
-  if (loopRange && Number.isFinite(+cfg.loop_interval_s)) loopRange.value = cfg.loop_interval_s;
-  if (wifiSleepRange && Number.isFinite(+cfg.wifi_idle_sleep_s)) wifiSleepRange.value = cfg.wifi_idle_sleep_s;
-  if (buttonSleepRange && Number.isFinite(+cfg.button_sleep_s)) buttonSleepRange.value = cfg.button_sleep_s;
-  if (ledBrightnessRange && Number.isFinite(+cfg.status_led_brightness)) ledBrightnessRange.value = cfg.status_led_brightness;
+  if (loopRange && Number.isFinite(+cfg.loop_interval_s)) {
+    loopRange.value = nearestOptionIndex(LOOP_INTERVAL_SECONDS, cfg.loop_interval_s, true);
+  }
+  if (wifiSleepRange && Number.isFinite(+cfg.wifi_idle_sleep_s)) {
+    wifiSleepRange.value = nearestOptionIndex(WIFI_SLEEP_SECONDS, cfg.wifi_idle_sleep_s);
+  }
+  if ('wifi_mode' in cfg) wifiModeText = cfg.wifi_mode || 'ap';
   if ('wifi_ap_ssid' in cfg) wifiSsidText = cfg.wifi_ap_ssid || 'PaperColor';
   if ('wifi_ap_password_set' in cfg) wifiPasswordSet = !!cfg.wifi_ap_password_set;
+  if ('wifi_sta_ssid' in cfg) wifiStaSsidText = cfg.wifi_sta_ssid || '';
+  if ('wifi_sta_password_set' in cfg) wifiStaPasswordSet = !!cfg.wifi_sta_password_set;
+  if ('mdns_host' in cfg) mdnsHostText = cfg.mdns_host || 'papercolor.local';
+  if ('battery_icon_enabled' in cfg) batteryIconEnabled = !!cfg.battery_icon_enabled;
   if ('fw_version' in cfg) firmwareVersionText = cfg.fw_version || 'PaperColor Frame';
   if ('build_time' in cfg) firmwareBuildTimeText = cfg.build_time || '';
 }
 function syncSettingsReadouts(cfg) {
   applyConfigToControls(cfg);
-  if (loopValue && loopRange) loopValue.textContent = fmtInterval(+loopRange.value);
-  if (wifiSleepValue && wifiSleepRange) wifiSleepValue.textContent = fmtInterval(+wifiSleepRange.value);
-  if (buttonSleepValue && buttonSleepRange) buttonSleepValue.textContent = fmtInterval(+buttonSleepRange.value);
-  if (ledBrightnessValue && ledBrightnessRange) ledBrightnessValue.textContent = fmtBrightness(+ledBrightnessRange.value);
+  if (loopValue && loopRange) loopValue.textContent = fmtInterval(optionSeconds(LOOP_INTERVAL_SECONDS, loopRange));
+  if (wifiSleepValue && wifiSleepRange) wifiSleepValue.textContent = fmtInterval(optionSeconds(WIFI_SLEEP_SECONDS, wifiSleepRange));
+  if (wifiModeSelect) wifiModeSelect.value = (wifiModeText === 'sta' || wifiModeText === 'sta_ap') ? wifiModeText : 'ap';
   if (wifiSsidValue) wifiSsidValue.textContent = wifiSsidText;
   if (wifiPasswordValue) wifiPasswordValue.textContent = wifiPasswordSet ? tr('settings.wifiProtected') : tr('settings.wifiOpen');
   if (wifiPasswordInput) {
@@ -2268,10 +3267,21 @@ function syncSettingsReadouts(cfg) {
       ? tr('settings.wifiPasswordChangePlaceholder')
       : tr('settings.wifiPasswordPlaceholder');
   }
+  if (wifiStaSsidInput && document.activeElement !== wifiStaSsidInput) wifiStaSsidInput.value = wifiStaSsidText;
+  if (wifiStaPasswordValue) wifiStaPasswordValue.textContent = wifiStaPasswordSet ? tr('settings.wifiProtected') : tr('settings.wifiOpen');
+  if (wifiStaPasswordInput) {
+    wifiStaPasswordInput.placeholder = wifiStaPasswordSet
+      ? tr('settings.wifiStaPasswordChangePlaceholder')
+      : tr('settings.wifiStaPasswordPlaceholder');
+  }
+  if (mdnsValue) mdnsValue.textContent = mdnsHostText;
+  if (batteryIconToggle) batteryIconToggle.checked = batteryIconEnabled;
+  if (batteryIconValue) batteryIconValue.textContent = batteryIconEnabled ? tr('settings.on') : tr('settings.off');
   if (autoAeValue && autoAeRange) autoAeValue.textContent = fmtEvBias(+autoAeRange.value);
   if (autoTempValue && autoTempRange) autoTempValue.textContent = fmtSigned(+autoTempRange.value);
   if (firmwareVersionEl) firmwareVersionEl.textContent = firmwareVersionText;
   if (firmwareBuildTimeEl) firmwareBuildTimeEl.textContent = firmwareBuildTimeText ? tr('settings.buildTime', {time: firmwareBuildTimeText}) : '';
+  syncSettingRangeWidgets();
 }
 async function saveConfigSetting(patch) {
   try {
@@ -2288,13 +3298,9 @@ async function saveConfigSetting(patch) {
   }
 }
 loopRange.oninput = () => syncSettingsReadouts();
-loopRange.onchange = () => saveConfigSetting({loop_interval_s: +loopRange.value});
+loopRange.onchange = () => saveConfigSetting({loop_interval_s: optionSeconds(LOOP_INTERVAL_SECONDS, loopRange)});
 wifiSleepRange.oninput = () => syncSettingsReadouts();
-wifiSleepRange.onchange = () => saveConfigSetting({wifi_idle_sleep_s: +wifiSleepRange.value});
-buttonSleepRange.oninput = () => syncSettingsReadouts();
-buttonSleepRange.onchange = () => saveConfigSetting({button_sleep_s: +buttonSleepRange.value});
-ledBrightnessRange.oninput = () => syncSettingsReadouts();
-ledBrightnessRange.onchange = () => saveConfigSetting({status_led_brightness: +ledBrightnessRange.value});
+wifiSleepRange.onchange = () => saveConfigSetting({wifi_idle_sleep_s: optionSeconds(WIFI_SLEEP_SECONDS, wifiSleepRange)});
 function validWifiPasswordInput(value) {
   return value.length === 0 || (/^[\x20-\x7e]{8,63}$/.test(value));
 }
@@ -2322,10 +3328,70 @@ if (wifiPasswordInput) {
   });
 }
 
+function validWifiSsidInput(value) {
+  return value.length <= 32 && (/^[\x20-\x7e]*$/.test(value));
+}
+async function saveWifiMode() {
+  if (!wifiModeSelect) return;
+  const ok = await saveConfigSetting({wifi_mode: wifiModeSelect.value});
+  if (ok) toastKey('toast.networkRestart');
+}
+async function saveStaWifi() {
+  if (!wifiStaSsidInput || !wifiStaPasswordInput) return;
+  const ssid = wifiStaSsidInput.value.trim();
+  const password = wifiStaPasswordInput.value;
+  if (!validWifiSsidInput(ssid)) {
+    toastKey('toast.wifiSsidInvalid');
+    return;
+  }
+  if (!validWifiPasswordInput(password)) {
+    toastKey('toast.wifiPasswordInvalid');
+    return;
+  }
+  const ok = await saveConfigSetting({wifi_sta_ssid: ssid, wifi_sta_password: password});
+  if (!ok) return;
+  wifiStaSsidText = ssid;
+  wifiStaPasswordSet = password.length > 0;
+  wifiStaPasswordInput.value = '';
+  syncSettingsReadouts();
+  toastKey('toast.wifiPasswordSaved');
+}
+if (wifiModeSelect) wifiModeSelect.onchange = saveWifiMode;
+if (saveStaWifiBtn) saveStaWifiBtn.onclick = saveStaWifi;
+if (wifiStaSsidInput) {
+  wifiStaSsidInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveStaWifi();
+    }
+  });
+}
+if (wifiStaPasswordInput) {
+  wifiStaPasswordInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveStaWifi();
+    }
+  });
+}
+if (batteryIconToggle) {
+  batteryIconToggle.onchange = async () => {
+    const previous = batteryIconEnabled;
+    batteryIconEnabled = batteryIconToggle.checked;
+    syncSettingsReadouts();
+    const ok = await saveConfigSetting({battery_icon_enabled: batteryIconEnabled});
+    if (!ok) {
+      batteryIconEnabled = previous;
+      syncSettingsReadouts();
+    }
+  };
+}
+
 function syncPipelineSettingControls() {
   if (!calib) return;
   calib = ensurePipelineConfig(calib);
   if (ditherModeSelect) ditherModeSelect.value = normalizeDitherMode(calib.pipeline.ditherMode);
+  if (colorimetryModeSelect) colorimetryModeSelect.value = normalizeColorimetryMode(calib.pipeline.colorimetryMode);
   if (autoAeRange) autoAeRange.value = calib.auto.exposureBias;
   if (autoTempRange) autoTempRange.value = calib.auto.temperatureBias;
   syncSettingsReadouts();
@@ -2338,12 +3404,18 @@ async function savePipelineSettings() {
     ditherMode = normalizeDitherMode(ditherModeSelect.value);
     calib.pipeline.ditherMode = ditherMode;
   }
+  if (colorimetryModeSelect) {
+    calib.pipeline.colorimetryMode = normalizeColorimetryMode(colorimetryModeSelect.value);
+  }
   if (autoAeRange) calib.auto.exposureBias = Math.round(+autoAeRange.value);
   if (autoTempRange) calib.auto.temperatureBias = Math.round(+autoTempRange.value);
   syncSettingsReadouts();
   try {
     const r = await api.setCalib(calib);
     if (!r.ok) throw new Error('HTTP ' + r.status);
+    // Re-push palette so the WASM picker uses the new colorimetry mode
+    // before the next preview render fires.
+    if (wasm) pushPaletteToWasm();
     schedulePreviewUpdate();
   } catch (e) {
     toastKey('toast.saveFailed');
@@ -2352,6 +3424,7 @@ async function savePipelineSettings() {
 }
 
 if (ditherModeSelect) ditherModeSelect.onchange = savePipelineSettings;
+if (colorimetryModeSelect) colorimetryModeSelect.onchange = savePipelineSettings;
 if (autoAeRange) {
   autoAeRange.oninput = () => syncSettingsReadouts();
   autoAeRange.onchange = savePipelineSettings;
@@ -2500,6 +3573,92 @@ function percentileFromHist(hist, n, q) {
   return hist.length - 1;
 }
 
+// ---------- sRGB ↔ Lab (D65) ----------
+// Pure JS mirror of the WASM rgb_to_lab_u8 used by the dither / CIEDE2000
+// metric, so AE statistics live in the same colour space as the rendering
+// pipeline. Reflective panels are perceived log-linearly in reflectance,
+// which Lab L* encodes — Y / Y_weighted_luma in sRGB does not.
+const _srgbLinearLut = (() => {
+  const lut = new Float32Array(256);
+  for (let i = 0; i < 256; i++) {
+    const v = i / 255;
+    lut[i] = v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  }
+  return lut;
+})();
+
+const _LAB_EPS = 216 / 24389;   // (6/29)^3
+const _LAB_KAPPA = 24389 / 27;  // (29/3)^3
+function _labF(t) {
+  return t > _LAB_EPS ? Math.cbrt(t) : (_LAB_KAPPA * t + 16) / 116;
+}
+
+// D65 reference white, sRGB→XYZ matrix (standard, matches color_pipeline.c).
+function srgbToLab(r, g, b) {
+  const R = _srgbLinearLut[r|0], G = _srgbLinearLut[g|0], B = _srgbLinearLut[b|0];
+  const X = (0.4124*R + 0.3576*G + 0.1805*B) / 0.95047;
+  const Y =  0.2126*R + 0.7152*G + 0.0722*B;
+  const Z = (0.0193*R + 0.1192*G + 0.9505*B) / 1.08883;
+  const fx = _labF(X), fy = _labF(Y), fz = _labF(Z);
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+
+// Fast L*-only variant for hot loops where we don't need a*, b*.
+function srgbToLabL(r, g, b) {
+  const Y = 0.2126*_srgbLinearLut[r|0] + 0.7152*_srgbLinearLut[g|0] + 0.0722*_srgbLinearLut[b|0];
+  return Y > _LAB_EPS ? 116 * Math.cbrt(Y) - 16 : _LAB_KAPPA * Y;
+}
+
+// Convert a stops/100 sRGB-domain exposure delta into the L* delta it
+// produces on a mid-luminance source pixel, and vice versa. Derived from
+// L* ≈ 116*(Y/Yn)^(1/3) - 16 and Y ∝ G^2.4 in the smooth part of sRGB:
+//   L_new + 16 ≈ (L_old + 16) * G^0.8 = (L_old + 16) * 2^(0.8*stops/100)
+//   ⇒ stops = 125 * log2((L_new + 16) / (L_old + 16))
+// Approximate for clipped highlights (shape breaks at sRGB=255) but the
+// AE bias slider absorbs the small residual. 125 = 100 / 0.8.
+function stopsToReachL(lFrom, lTo) {
+  return 125 * Math.log2(Math.max(1, lTo + 16) / Math.max(1, lFrom + 16));
+}
+
+// 34-point panel-gamut summary in Lab. Built from the 6 measured primaries
+// plus all measured mixture patches in the active calibration. This is the
+// *real* envelope of what Spectra 6 can render — not a guessed ceiling.
+let _gamutCacheKey = null, _gamutCache = null;
+function panelGamutLab() {
+  const key = calib ? JSON.stringify({p: calib.palette, m: calib.mixtures && calib.mixtures.patches}) : 'fallback';
+  if (key === _gamutCacheKey && _gamutCache) return _gamutCache;
+  const labs = [];
+  for (const name of PALETTE_ORDER) {
+    const rgb = (calib && calib.palette && calib.palette[name] && calib.palette[name].rgb)
+             || CALIB_FALLBACK.palette[name].rgb;
+    labs.push(srgbToLab(rgb[0], rgb[1], rgb[2]));
+  }
+  const mixSrc = (calib && calib.mixtures && calib.mixtures.patches) || CALIB_FALLBACK.mixtures.patches;
+  for (const name in mixSrc) {
+    const rgb = mixSrc[name] && mixSrc[name].rgb;
+    if (Array.isArray(rgb)) labs.push(srgbToLab(rgb[0], rgb[1], rgb[2]));
+  }
+  // Panel L* extremes — the hard ceiling/floor for what dither can produce.
+  // Hue-dependent chroma envelopes — how much C* the panel can reach when
+  // the source asks for a bright vs mid vs dark saturated colour. Source
+  // pixels exceeding these are gamut-clipped by the dither (the actual
+  // failure mode the user sees as "washed out highlights" or "muddy
+  // saturated mids").
+  let lMin = Infinity, lMax = -Infinity;
+  let cMaxHi = 0, cMaxMid = 0, cMaxLo = 0;
+  for (const lab of labs) {
+    const L = lab[0], C = Math.hypot(lab[1], lab[2]);
+    if (L < lMin) lMin = L;
+    if (L > lMax) lMax = L;
+    if (L >= 55 && C > cMaxHi) cMaxHi = C;
+    else if (L >= 40 && C > cMaxMid) cMaxMid = C;
+    else if (C > cMaxLo) cMaxLo = C;
+  }
+  _gamutCache = { lMin, lMax, cMaxHi, cMaxMid, cMaxLo, lRange: lMax - lMin };
+  _gamutCacheKey = key;
+  return _gamutCache;
+}
+
 function analyzeCanvasForAuto(canvas) {
   const w = 120, h = 180;
   const c = document.createElement('canvas');
@@ -2510,13 +3669,28 @@ function analyzeCanvasForAuto(canvas) {
   ctx.drawImage(canvas, 0, 0, w, h);
   const data = ctx.getImageData(0, 0, w, h).data;
 
+  // The dither metric and CIEDE2000 distances all live in Lab. AE makes
+  // its decisions in the same space, against panel-Lab gamut extracted from
+  // the 34 measured calibration patches (6 primaries + 28 mixtures). The
+  // legacy sRGB-derived stats (chroma, warm/cool, skin, etc.) are kept
+  // because the scene classifier and the colour/detail stages downstream
+  // still consume them.
+  const gamut = panelGamutLab();
+  const lMaxFloor = gamut.lMax - 2;
+  const satGamutHi = Math.max(8, gamut.cMaxHi);
+  const inv95047 = 1 / 0.95047, inv108883 = 1 / 1.08883;
+
   let sumY=0, sumY2=0, edge=0, chroma=0, satSum=0;
   let warm=0, cool=0, blue=0, green=0, red=0, skin=0, flat=0;
   let bright=0, dark=0, clipHi=0, clipLo=0;
   let sumR=0, sumG=0, sumB=0;
   let centerY=0, cornerY=0, centerN=0, cornerN=0;
+  let sumL=0, sumC=0, satClip=0;
   const hist = new Uint32Array(256);
+  const histL = new Uint32Array(256);  // L* * 2.55 buckets
+  const histC = new Uint32Array(256);  // C* * 1.5 buckets (cap ~170)
   const ys = new Uint8Array(w*h);
+  const ls = new Uint8Array(w*h);      // L* * 2.55 per pixel
   for (let y = 0, i = 0; y < h; y++) {
     for (let x = 0; x < w; x++, i++) {
       const j = i*4, r=data[j], g=data[j+1], b=data[j+2];
@@ -2530,6 +3704,32 @@ function analyzeCanvasForAuto(canvas) {
       const ch = maxc - minc;
       const sat = maxc > 0 ? ch / maxc : 0;
       chroma += ch; satSum += sat;
+
+      // sRGB→Lab inlined: cheaper than the function call on 21,600 pixels.
+      const R = _srgbLinearLut[r], G = _srgbLinearLut[g], B = _srgbLinearLut[b];
+      const Xn = (0.4124*R + 0.3576*G + 0.1805*B) * inv95047;
+      const Yn =  0.2126*R + 0.7152*G + 0.0722*B;
+      const Zn = (0.0193*R + 0.1192*G + 0.9505*B) * inv108883;
+      const fx = Xn > _LAB_EPS ? Math.cbrt(Xn) : (_LAB_KAPPA*Xn + 16) / 116;
+      const fy = Yn > _LAB_EPS ? Math.cbrt(Yn) : (_LAB_KAPPA*Yn + 16) / 116;
+      const fz = Zn > _LAB_EPS ? Math.cbrt(Zn) : (_LAB_KAPPA*Zn + 16) / 116;
+      const L = 116*fy - 16;
+      const aL = 500*(fx - fy);
+      const bL = 200*(fy - fz);
+      const Cstar = Math.hypot(aL, bL);
+      sumL += L; sumC += Cstar;
+      const Li = L < 0 ? 0 : L > 100 ? 255 : Math.round(L * 2.55);
+      const Ci = Cstar > 170 ? 255 : Math.round(Cstar * 1.5);
+      ls[i] = Li;
+      histL[Li]++;
+      histC[Ci]++;
+      // Out-of-gamut bright-saturated highlight: source asks for high L*
+      // + high C*, but the panel's highlight chroma envelope (cMaxHi from
+      // the 34-point gamut hull) cannot deliver. These pixels are the
+      // ones that visibly bleach to washed-out white in the dither, and
+      // they need AE to pull L* down so they land inside panel gamut.
+      if (L > lMaxFloor && Cstar > satGamutHi * 1.1) satClip++;
+
       if (yy > 190) bright++;
       if (yy < 55) dark++;
       if (yy > 242) clipHi++;
@@ -2547,10 +3747,19 @@ function analyzeCanvasForAuto(canvas) {
       if (rr > 1.05) { cornerY += yy; cornerN++; }
     }
   }
+  // clipCoreL counts interior pixels of L*-blown blobs (4-neighbours all
+  // above panel ceiling). On reflective paper a single textureless white
+  // patch is the most destructive failure mode — the eye anchors on it
+  // and reads the rest of the image as low contrast. Scattered specular
+  // sparkles aren't included because their neighbours dither down.
+  const lCeilByte = Math.max(0, Math.min(255, Math.round((gamut.lMax - 3) * 2.55)));
+  let clipCoreL = 0;
   for (let y = 1; y < h-1; y++) {
     for (let x = 1; x < w-1; x++) {
       const i = y*w+x;
       edge += Math.abs(ys[i+1]-ys[i-1]) + Math.abs(ys[i+w]-ys[i-w]);
+      if (ls[i] >= lCeilByte && ls[i-1] >= lCeilByte && ls[i+1] >= lCeilByte
+                             && ls[i-w] >= lCeilByte && ls[i+w] >= lCeilByte) clipCoreL++;
     }
   }
   const n = w*h;
@@ -2563,15 +3772,32 @@ function analyzeCanvasForAuto(canvas) {
   const p75 = percentileFromHist(hist, n, 0.75);
   const p90 = percentileFromHist(hist, n, 0.90);
   const p98 = percentileFromHist(hist, n, 0.98);
+  // Lab percentiles drive every AE target downstream — converted back to
+  // L*/C* by dividing out the histogram-bucket scale.
+  const lP02  = percentileFromHist(histL, n, 0.02)  / 2.55;
+  const lP10  = percentileFromHist(histL, n, 0.10)  / 2.55;
+  const lP50  = percentileFromHist(histL, n, 0.50)  / 2.55;
+  const lP90  = percentileFromHist(histL, n, 0.90)  / 2.55;
+  const lP98  = percentileFromHist(histL, n, 0.98)  / 2.55;
+  const lP99  = percentileFromHist(histL, n, 0.99)  / 2.55;
+  const lP998 = percentileFromHist(histL, n, 0.998) / 2.55;
+  const cP95  = percentileFromHist(histC, n, 0.95)  / 1.5;
+  const cP98  = percentileFromHist(histC, n, 0.98)  / 1.5;
   const edgeAvg = edge / ((w-2)*(h-2));
   return {
     mean, std, edge: edgeAvg, chroma: chroma/n, saturation: satSum/n,
     p02, p10, p25, p50, p75, p90, p98,
+    lMean: sumL/n, lP02, lP10, lP50, lP90, lP98, lP99, lP998,
+    cMean: sumC/n, cP95, cP98,
     warm: warm/n, cool: cool/n, blue: blue/n, green: green/n, red: red/n, skin: skin/n, flat: flat/n,
     bright: bright/n, dark: dark/n, clipHi: clipHi/n, clipLo: clipLo/n,
+    clipCoreL: clipCoreL / ((w-2)*(h-2)),
+    satClip: satClip / n,
     rMean: sumR/n, gMean: sumG/n, bMean: sumB/n,
     spread: p90 - p10,
-    vignetteDelta: (centerY/Math.max(1,centerN)) - (cornerY/Math.max(1,cornerN))
+    lSpread: lP90 - lP10,
+    vignetteDelta: (centerY/Math.max(1,centerN)) - (cornerY/Math.max(1,cornerN)),
+    gamut,
   };
 }
 
@@ -2599,25 +3825,86 @@ function chooseAutoPreset(stats) {
 
 function autoIspExposureTone(base, scene, stats, autoCfg) {
   const key = scene.key;
-  // AE + tone mapping: percentile-based instead of mean-only. This preserves
-  // low-key/high-key intent while landing the median in the Spectra 6 range.
-  const mid = stats.p50 * 0.68 + stats.mean * 0.32;
-  const targetMid = key === 'document' ? 170
-                  : key === 'portrait' ? 150
-                  : key === 'anime' ? 150
-                  : key === 'landscape' ? 144
-                  : 142;
-  base.exposure = Math.round(Math.log2(targetMid / Math.max(28, mid)) * 100);
-  if (stats.clipHi > 0.08 || stats.p98 > 248) base.exposure -= 5;
-  if (scene.lowKey && key !== 'document') base.exposure += 4;
-  base.exposure += autoCfg.exposureBias;
-  base.exposure = clampNum(base.exposure, -300, 300);
+  // All targets and caps live in Lab L*, against the panel's actual gamut
+  // hull from the 34 measured calibration patches. Exposure → L* conversion
+  // uses stopsToReachL (an sRGB-gamma-aware approximation), since the
+  // C-pipeline applies exposure as a sRGB-domain multiplicative gain.
+  const g = stats.gamut;        // { lMin, lMax, cMaxHi, cMaxMid, cMaxLo, lRange }
 
-  const spreadBoost = Math.round((118 - stats.spread) * 0.15);
+  // ---- Midtone target in L* ----
+  // Anchor source p50 to a fraction of the panel range. On reflective paper
+  // a midtone that's "perceptually middle gray" (L*≈50) is too dark — the
+  // viewer adapts to panel white as their reference, so we want p50 sitting
+  // in the upper-mid of the achievable [lMin, lMax] range. Document scenes
+  // push higher (the background must read as white), portraits/landscapes
+  // sit a bit lower to keep highlight headroom for skin / sky.
+  const midFrac = key === 'document' ? 0.80
+                : key === 'portrait' ? 0.66
+                : key === 'anime'    ? 0.68
+                : key === 'landscape'? 0.62
+                : 0.66;
+  const lTargetMid = g.lMin + g.lRange * midFrac;
+  const midExposure = stopsToReachL(stats.lP50, lTargetMid);
+
+  // ---- Highlight headroom caps in L* ----
+  // The panel can only render L* ≤ lMax. We aim p99 *below* the ceiling so
+  // the dither still has halftone room (real texture, not solid white);
+  // p99.8 is allowed to land near or just over the ceiling so a genuine
+  // specular glint still renders as solid white instead of grey.
+  const hiHeadroom = key === 'document' ? 1 : key === 'portrait' ? 5 : 3;
+  const lTargetP99  = g.lMax - hiHeadroom;
+  const lTargetP998 = g.lMax + 1.5;
+  const capMain = stopsToReachL(stats.lP99,  lTargetP99);
+  const capSpec = stopsToReachL(stats.lP998, lTargetP998);
+  let exposure = Math.min(midExposure, capMain, capSpec);
+
+  // ---- Spatial penalty: connected textureless-white blobs ----
+  // On reflective paper a big blown patch is the most destructive failure
+  // mode — the eye locks onto it. clipCoreL is computed in L* space against
+  // the panel ceiling, so it doesn't false-trigger on bright but in-gamut
+  // halftones.
+  const corePenalty = Math.min(30, Math.max(0, stats.clipCoreL - 0.005) * 380);
+  exposure -= corePenalty;
+
+  // ---- Saturated-colour highlight penalty (panel gamut, not sRGB) ----
+  // satClip counts pixels where source L*+C* exceeds the panel's high-L*
+  // chroma envelope (cMaxHi from the 34-point hull). The dither bleaches
+  // these to washed-out white-ish halftones. Pulling exposure down moves
+  // them into the L* range where the panel actually has chroma to spend.
+  if (stats.satClip > 0.02 && corePenalty < 10) {
+    exposure -= Math.min(14, (stats.satClip - 0.02) * 280);
+  }
+
+  // ---- Floor: don't crater clean low-key scenes ----
+  // The eye adapts on reflective media — going too dark is worse than a
+  // mildly hot highlight, because then everything sits near panel-black and
+  // the image looks lifeless. Cap downward AE pressure at ~1.8 stops.
+  exposure = Math.max(exposure, -180);
+
+  // ---- Recover lost midtones via downstream gamma + contrast ----
+  // When the highlight caps forced us below the midtone target, the image
+  // would render dim. Gamma is the last op before dither in the C pipeline,
+  // and its gain near the panel-white ceiling is ~1.0, so it lifts the
+  // shadow→mid range without re-blowing highlights. Contrast tightens the
+  // S-curve around 128 for perceived punch.
+  const headroomLoss = Math.max(0, midExposure - exposure);
+  base.gamma    += clampNum(Math.round(headroomLoss * 0.22), 0, 14);
+  base.contrast += clampNum(Math.round(headroomLoss * 0.18), 0, 12);
+
+  if (scene.lowKey && key !== 'document') exposure += 4;
+  exposure += autoCfg.exposureBias;
+  base.exposure = Math.round(clampNum(exposure, -300, 300));
+
+  // ---- Legacy contrast/gamma scene adjustments (use Lab spread now) ----
+  // Source images with a narrow L* spread benefit from extra contrast on
+  // this panel — the dither can render the full panel range, so we want
+  // input to use that range too. Tuned against Lab spread (lP90 - lP10)
+  // instead of sRGB Y so it tracks perceived contrast, not luma.
+  const spreadBoost = Math.round((45 - stats.lSpread) * 0.42);
   base.contrast += clampNum(spreadBoost, -10, 14);
   if (key === 'document') base.contrast += 6;
   if (key === 'portrait') base.contrast -= 3;
-  base.gamma += clampNum(Math.round((106 - stats.p50) * 0.08), -7, 9);
+  base.gamma += clampNum(Math.round((48 - stats.lP50) * 0.22), -7, 9);
   if (stats.dark > 0.22) base.gamma += 3;
   if (stats.bright > 0.40) base.gamma -= 2;
 }
@@ -2718,6 +4005,14 @@ function paletteLumaTable() {
   });
 }
 
+function paletteLabTable() {
+  return PALETTE_ORDER.map(name => {
+    const c = (calib && calib.palette && calib.palette[name]) || CALIB_FALLBACK.palette[name];
+    const rgb = (c && c.rgb) || [128, 128, 128];
+    return srgbToLab(rgb[0], rgb[1], rgb[2]);
+  });
+}
+
 function makeAutoPanelSourceLuma(rgb, srcW, srcH, panelW, panelH) {
   const out = new Uint8Array(panelW * panelH);
   for (let y = 0; y < panelH; y++) {
@@ -2731,43 +4026,66 @@ function makeAutoPanelSourceLuma(rgb, srcW, srcH, panelW, panelH) {
   return out;
 }
 
-function scoreAutoCandidate(indices, values, stats, sourceY, panelW, panelH) {
+// Source image sampled onto the panel grid in Lab — feeds ΔE-based AE
+// candidate scoring against the predicted panel-Lab render.
+function makeAutoPanelSourceLab(rgb, srcW, srcH, panelW, panelH) {
+  const out = new Float32Array(panelW * panelH * 3);
+  for (let y = 0; y < panelH; y++) {
+    const sy = Math.min(srcH - 1, Math.max(0, Math.round((y + 0.5) * srcH / panelH - 0.5)));
+    for (let x = 0; x < panelW; x++) {
+      const sx = Math.min(srcW - 1, Math.max(0, Math.round((x + 0.5) * srcW / panelW - 0.5)));
+      const j = (sy * srcW + sx) * 3;
+      const lab = srgbToLab(rgb[j], rgb[j+1], rgb[j+2]);
+      const k = (y * panelW + x) * 3;
+      out[k] = lab[0]; out[k+1] = lab[1]; out[k+2] = lab[2];
+    }
+  }
+  return out;
+}
+
+function scoreAutoCandidate(indices, values, stats, sourceLab, panelW, panelH) {
   const n = panelW * panelH;
-  const palY = paletteLumaTable();
-  const yBlack = palY[0], yWhite = palY[1], range = Math.max(1, yWhite - yBlack);
-  const opticalY = opticalLumaFromIndices(indices, panelW, panelH);
+  // Predicted panel-Lab from the actual WASM-dither indices via the
+  // measured optical-mixing kernel — same render the user will see. The
+  // primary objective is mean perceptual distance to the source Lab; this
+  // replaces the previous (Y-only, mean/std-targeting) heuristic and lets
+  // AE candidate selection minimise *actual* perceived error, including
+  // out-of-gamut bleaching and saturation collapse.
+  const panelLab = panelLabFromIndices(indices, panelW, panelH);
   const counts = new Array(PALETTE_ORDER.length).fill(0);
-  let sum=0, sum2=0, visible=0, shadowChalk=0;
+  let sumDE2 = 0, visible = 0, shadowChalk = 0;
   for (let i = 0; i < n; i++) {
     const idx = indices[i] || 0;
     counts[idx]++;
-    const y = opticalY[i];
-    sum += y; sum2 += y*y;
-    const sy = sourceY[i];
-    if (sy > 188 && (idx === 0 || idx === 3 || idx === 4)) visible += (idx === 0 ? 1.25 : 1.0);
-    if (sy < 52 && (idx === 1 || idx === 2)) shadowChalk += (idx === 1 ? 1.0 : 0.55);
+    const k = i * 3;
+    const srcL = sourceLab[k];
+    const dL = srcL          - panelLab[k];
+    const da = sourceLab[k+1] - panelLab[k+1];
+    const db = sourceLab[k+2] - panelLab[k+2];
+    sumDE2 += dL*dL + da*da + db*db;
+    // Soft regularisers carried from the heuristic scorer: punish visible
+    // wrong-colour dots in highlights and chalk dots in shadows. ΔE alone
+    // catches these on average, but local conspicuousness on reflective
+    // paper isn't well represented by mean ΔE — explicit terms keep them
+    // out. Source L* (sourceLab[k]) replaces the previous Y8 threshold.
+    if (srcL > 70 && (idx === 0 || idx === 3 || idx === 4)) visible += (idx === 0 ? 1.25 : 1.0);
+    if (srcL < 25 && (idx === 1 || idx === 2)) shadowChalk += (idx === 1 ? 1.0 : 0.55);
   }
-  const mean = sum / n;
-  const std = Math.sqrt(Math.max(0, sum2 / n - mean * mean));
-  const mood = clampNum(stats.p50 / 255, 0, 1);
-  let targetMean = yBlack + range * clampNum(0.38 + 0.34 * Math.pow(mood, 0.72), 0.45, 0.72);
-  if (stats.edge > 46 && stats.chroma < 34) targetMean += 5;
-  if (stats.skin > 0.075) targetMean += 2;
-  const targetStd = clampNum(range * (0.17 + 0.21 * clampNum(stats.spread / 170, 0, 1)), 13, 30);
+  // RMSE in ΔE76 units — a single number with perceptual meaning.
+  let score = Math.sqrt(sumDE2 / n);
+  // Heuristic add-ons, scaled so a 1% visible-ink rate adds ≤ 0.3 ΔE.
+  score += (visible / n) * 28;
+  score += (shadowChalk / n) * 14;
 
   const frac = counts.map(c => c / n);
-  let score = Math.abs(mean - targetMean) * 0.92 + Math.abs(std - targetStd) * 0.78;
-  score += (visible / n) * (stats.edge > 46 && stats.chroma < 34 ? 36 : 118);
-  score += (shadowChalk / n) * 42;
-  if (frac[0] > 0.34 && stats.dark < 0.22) score += (frac[0] - 0.34) * 34;
-  if (frac[1] > 0.78 && stats.std > 34) score += (frac[1] - 0.78) * 26;
-
+  if (frac[0] > 0.34 && stats.dark < 0.22) score += (frac[0] - 0.34) * 12;
+  if (frac[1] > 0.78 && stats.std > 34)    score += (frac[1] - 0.78) *  8;
   const redFrac = frac[3], blueFrac = frac[4], greenFrac = frac[5], yellowFrac = frac[2];
   if (stats.green > stats.red * 1.25 && stats.green > 0.10 && redFrac > greenFrac + yellowFrac * 0.7) {
-    score += (redFrac - greenFrac) * 42;
+    score += (redFrac - greenFrac) * 16;
   }
   if (stats.blue > stats.red * 1.25 && stats.blue > 0.08 && redFrac + yellowFrac > blueFrac + 0.08) {
-    score += (redFrac + yellowFrac - blueFrac) * 34;
+    score += (redFrac + yellowFrac - blueFrac) * 12;
   }
   if ((stats.flat > 0.42 || stats.bright > 0.34) && values.smoothness < 8) score += (8 - values.smoothness) * 0.20;
   if (stats.edge > 48 && values.sharpen < 38) score += (38 - values.sharpen) * 0.10;
@@ -2810,14 +4128,17 @@ async function refineAutoAdjustPanelAware(seed) {
   const srcW = panelW * 3 / 2, srcH = panelH * 3 / 2;
   const canvas = bakeCroppedCanvas(srcW, srcH);
   const baseRgb = extractRgbFromCanvas(canvas, srcW, srcH);
-  const sourceY = makeAutoPanelSourceLuma(baseRgb, srcW, srcH, panelW, panelH);
+  // Compute the source-Lab grid once outside the candidate loop — same
+  // panel resolution as the dither output, so scoreAutoCandidate can do a
+  // direct per-pixel ΔE without resampling.
+  const sourceLab = makeAutoPanelSourceLab(baseRgb, srcW, srcH, panelW, panelH);
   let best = seed.values;
   let bestScore = Infinity;
 
   let n = 0;
   for (const values of makeAutoCandidates(seed)) {
     const indices = await simulateAutoCandidate(baseRgb, srcW, srcH, panelW, panelH, values);
-    const score = scoreAutoCandidate(indices, values, seed.stats, sourceY, panelW, panelH);
+    const score = scoreAutoCandidate(indices, values, seed.stats, sourceLab, panelW, panelH);
     if (score < bestScore) {
       bestScore = score;
       best = values;
@@ -2999,6 +4320,69 @@ renderPresetSelect();
 
 // ---------- Live preview ----------
 
+// Build a coarse local-mean luma map for the buffer. Used as the "base"
+// signal in local exposure attenuation — same role the discarded base[]
+// plays in enhance_eink_rgb888 in color_pipeline.c. Cheap: downsample by
+// ~12× via area averaging, then bilinearly upsample. Output is normalised
+// luma in [0, 1] per pixel, w*h floats.
+function buildLocalLumaBase(buf, w, h) {
+  const dw = Math.max(6, w >> 3) | 0;
+  const dh = Math.max(6, h >> 3) | 0;
+  const dluma = new Float32Array(dw * dh);
+  const cellW = w / dw, cellH = h / dh;
+  for (let by = 0; by < dh; by++) {
+    const y0 = (by * cellH) | 0;
+    const y1 = Math.min(h, ((by + 1) * cellH) | 0);
+    for (let bx = 0; bx < dw; bx++) {
+      const x0 = (bx * cellW) | 0;
+      const x1 = Math.min(w, ((bx + 1) * cellW) | 0);
+      let sum = 0, cnt = 0;
+      for (let py = y0; py < y1; py++) {
+        let j = (py * w + x0) * 3;
+        for (let px = x0; px < x1; px++, j += 3) {
+          sum += 0.299*buf[j] + 0.587*buf[j+1] + 0.114*buf[j+2];
+          cnt++;
+        }
+      }
+      dluma[by * dw + bx] = cnt > 0 ? sum / cnt / 255 : 0;
+    }
+  }
+  // One light 3x3 box blur on the downsampled grid to soften block
+  // boundaries that would otherwise show as posterisation in the bilerp.
+  const blurred = new Float32Array(dw * dh);
+  for (let y = 0; y < dh; y++) {
+    const ym = y > 0 ? y - 1 : 0;
+    const yp = y < dh - 1 ? y + 1 : dh - 1;
+    for (let x = 0; x < dw; x++) {
+      const xm = x > 0 ? x - 1 : 0;
+      const xp = x < dw - 1 ? x + 1 : dw - 1;
+      blurred[y*dw + x] = (
+        dluma[ym*dw + xm] + dluma[ym*dw + x] + dluma[ym*dw + xp] +
+        dluma[ y*dw + xm] + dluma[ y*dw + x] + dluma[ y*dw + xp] +
+        dluma[yp*dw + xm] + dluma[yp*dw + x] + dluma[yp*dw + xp]
+      ) / 9;
+    }
+  }
+  // Bilinear upsample to full resolution.
+  const out = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const fy = (y + 0.5) / cellH - 0.5;
+    const y0 = Math.max(0, Math.min(dh - 2, Math.floor(fy)));
+    const ty = Math.max(0, Math.min(1, fy - y0));
+    for (let x = 0; x < w; x++) {
+      const fx = (x + 0.5) / cellW - 0.5;
+      const x0 = Math.max(0, Math.min(dw - 2, Math.floor(fx)));
+      const tx = Math.max(0, Math.min(1, fx - x0));
+      const v00 = blurred[ y0   *dw + x0    ];
+      const v01 = blurred[ y0   *dw + x0 + 1];
+      const v10 = blurred[(y0+1)*dw + x0    ];
+      const v11 = blurred[(y0+1)*dw + x0 + 1];
+      out[y*w + x] = (v00*(1-tx) + v01*tx)*(1-ty) + (v10*(1-tx) + v11*tx)*ty;
+    }
+  }
+  return out;
+}
+
 // Extra browser-side controls that are intentionally not part of the C
 // adjust_cfg_t ABI. They run before WASM enhancement/dither for both preview
 // and final upload: exposure is multiplicative, vignette can compensate
@@ -3011,8 +4395,40 @@ function applyExtraAdjustRgb888(buf, w, h, values = perImageAdjust) {
 
   if (exposure) {
     const gain = Math.pow(2, exposure / 100);
-    for (let i = 0; i < buf.length; i++) {
-      buf[i] = Math.max(0, Math.min(255, Math.round(buf[i] * gain)));
+    // Local exposure attenuation: when global gain pushes brightness up,
+    // pixels whose *neighbourhood* is already bright get less gain than
+    // pixels in shadow. This is a structural fix for the "single hot
+    // window destroys the whole image" failure mode the global AE can't
+    // solve on its own — it lets AE pick a higher exposure target with
+    // confidence that local highlights won't blow.
+    //
+    // The local-mean base is a downsampled+bilerp-upsampled luma map, so
+    // edges between bright/dark regions are soft (no halo). For gain ≤ 1
+    // we skip the local pass entirely — there's nothing to protect — and
+    // fall back to the original cheap global path.
+    if (gain > 1.05) {
+      const base = buildLocalLumaBase(buf, w, h);
+      // alpha controls how aggressively local-bright pixels get attenuated.
+      // 0 = pure global gain; ~4 = strong local protection. The threshold
+      // 0.55 corresponds to roughly the upper third of L* on the panel —
+      // below it the pixel is in mid/shadow and gets the full global gain.
+      const alpha = 4.0;
+      const minAttn = 0.35;       // never collapse local gain below this
+      for (let i = 0, px = 0; i < buf.length; i += 3, px++) {
+        const b = base[px];
+        const over = b - 0.55;
+        const protectK = over > 0 ? alpha * over * over * (gain - 1) : 0;
+        const attn = Math.max(minAttn, 1 / (1 + protectK));
+        const g = gain * attn;
+        buf[i+0] = Math.max(0, Math.min(255, Math.round(buf[i+0] * g)));
+        buf[i+1] = Math.max(0, Math.min(255, Math.round(buf[i+1] * g)));
+        buf[i+2] = Math.max(0, Math.min(255, Math.round(buf[i+2] * g)));
+      }
+    } else {
+      // No local protection needed when we're not pushing brighter.
+      for (let i = 0; i < buf.length; i++) {
+        buf[i] = Math.max(0, Math.min(255, Math.round(buf[i] * gain)));
+      }
     }
   }
 
@@ -3109,6 +4525,35 @@ function opticalLumaFromIndices(indices, w, h) {
       }
       const rgb = rgbFromIndexWeights(weights, n);
       out[y * w + x] = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2];
+    }
+  }
+  return out;
+}
+
+// Same 3×3 optical kernel as opticalLumaFromIndices, but returns Lab triples
+// (L*, a*, b*) instead of Y. This is the *predicted* perceived Lab of the
+// halftoned panel under typical viewing distance, given the measured mixing
+// exponent — the right reference for ΔE-based AE candidate scoring.
+function panelLabFromIndices(indices, w, h) {
+  const out = new Float32Array(w * h * 3);
+  const n = opticalMixExponent();
+  const kernel = [
+    [-1,-1,1], [0,-1,2], [1,-1,1],
+    [-1, 0,2], [0, 0,4], [1, 0,2],
+    [-1, 1,1], [0, 1,2], [1, 1,1],
+  ];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const weights = [0,0,0,0,0,0];
+      for (const [dx, dy, wt] of kernel) {
+        const xx = Math.max(0, Math.min(w - 1, x + dx));
+        const yy = Math.max(0, Math.min(h - 1, y + dy));
+        weights[indices[yy * w + xx] || 0] += wt;
+      }
+      const rgb = rgbFromIndexWeights(weights, n);
+      const lab = srgbToLab(rgb[0], rgb[1], rgb[2]);
+      const k = (y * w + x) * 3;
+      out[k] = lab[0]; out[k+1] = lab[1]; out[k+2] = lab[2];
     }
   }
   return out;
@@ -3510,6 +4955,10 @@ function openUpload(srcBitmap, opts) {
     syncAdjustControls();
   } else {
     setPerImageAdjustFromCalib();
+  }
+  // Reflect the current colorimetry mode in the Experimental dropdown.
+  if (colorimetryModeSelect && calib) {
+    colorimetryModeSelect.value = normalizeColorimetryMode(calib.pipeline && calib.pipeline.colorimetryMode);
   }
   uploadSheet.classList.add('is-open');
   setUploadStep('crop');
@@ -4038,22 +5487,53 @@ function targetEffectiveRgb(target, source = calib) {
 
 function opticalMixExponent(source = calib) {
   source = ensureMixtureCalib(source || JSON.parse(JSON.stringify(CALIB_FALLBACK)));
+  // LEGACY: RGB-domain SSE — the pre-2026-05 fitter, kept bit-exact for the
+  // default mode.  SCE: fit in Lab using the spreadsheet's measured Lab
+  // (more precise than the 8-bit roundtrip the legacy path went through).
+  const mode = normalizeColorimetryMode(source.pipeline && source.pipeline.colorimetryMode);
+  if (mode === 'legacy') {
+    const measured = [];
+    for (const target of CALIB_TARGETS) {
+      if (target.solid) continue;
+      const entry = measuredPatchEntry(target, source);
+      if (entry) measured.push([target, entry.rgb]);
+    }
+    if (!measured.length) return 1.85;
+    let bestN = 1.85, bestE = Infinity;
+    for (let n = 1.0; n <= 4.01; n += 0.05) {
+      let err = 0;
+      for (const [target, rgb] of measured) {
+        const pred = mixRgbFromWeights(target.weights, n, source);
+        for (let ch = 0; ch < 3; ch++) {
+          const d = pred[ch] - rgb[ch];
+          err += d * d;
+        }
+      }
+      if (err < bestE) { bestE = err; bestN = n; }
+    }
+    return bestN;
+  }
   const measured = [];
   for (const target of CALIB_TARGETS) {
     if (target.solid) continue;
     const entry = measuredPatchEntry(target, source);
-    if (entry) measured.push([target, entry.rgb]);
+    if (entry && Array.isArray(entry.rgb)) {
+      measured.push([target, srgbToLab(entry.rgb[0]|0, entry.rgb[1]|0, entry.rgb[2]|0)]);
+    } else if (CALIB_FALLBACK_LAB.mixtures.patches[target.id]) {
+      measured.push([target, CALIB_FALLBACK_LAB.mixtures.patches[target.id]]);
+    }
   }
   if (!measured.length) return 1.85;
   let bestN = 1.85, bestE = Infinity;
   for (let n = 1.0; n <= 4.01; n += 0.05) {
     let err = 0;
-    for (const [target, rgb] of measured) {
-      const pred = mixRgbFromWeights(target.weights, n, source);
-      for (let ch = 0; ch < 3; ch++) {
-        const d = pred[ch] - rgb[ch];
-        err += d * d;
-      }
+    for (const [target, refLab] of measured) {
+      const predRgb = mixRgbFromWeights(target.weights, n, source);
+      const predLab = srgbToLab(predRgb[0]|0, predRgb[1]|0, predRgb[2]|0);
+      const dL = predLab[0] - refLab[0];
+      const da = predLab[1] - refLab[1];
+      const db = predLab[2] - refLab[2];
+      err += dL*dL + da*da + db*db;
     }
     if (err < bestE) { bestE = err; bestN = n; }
   }

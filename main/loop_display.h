@@ -18,6 +18,11 @@ int loop_display_request_show(const char *name);
 // Async: ask the worker to advance to the next photo in the directory.
 int loop_display_request_next(void);
 
+// Async: paint the welcome card unconditionally, regardless of whether the
+// photo library is empty. Used by the "long-press top button" recovery path
+// so the user can read the AP credentials when they've forgotten them.
+int loop_display_request_welcome(void);
+
 // Async: paint the entire panel with a single ink (ink_code is the panel's
 // 4-bit code: 0=black 1=white 2=yellow 3=red 5=blue 6=green).  Used by the
 // calibration wizard so the user has a full-screen reference to match

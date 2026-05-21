@@ -5,14 +5,17 @@
 //   2. Mount SD on shared SPI bus.
 //   3. Init NVS (config_store) and create /sdcard/photos.
 //   4. Start the EPD worker task (loop_display).
-//   5. SoftAP up, DNS hijack on :53, HTTP server on :80.
-//   6. Start power manager for buttons, LEDs, and deep sleep.
-//   7. main() exits and lets FreeRTOS run the worker + httpd forever.
+//   5. Start SoftAP/DNS/HTTP only for reset boots and top-button wakeups.
+//   6. Queue one-shot refreshes for timer or side-button wakeups.
+//   7. Start power manager for buttons, optional LEDs, and deep sleep.
+//   8. main() exits and lets FreeRTOS run the worker + httpd forever.
 //
 // The display worker auto-advances every config_get_loop_interval_s() while
 // awake. In low-power mode the ESP also uses that interval as its timer wake.
 
 #include <stdio.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <string.h>
 
 #include "freertos/FreeRTOS.h"
@@ -45,6 +48,11 @@ static void log_heap(const char *tag)
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
 }
 
+static bool wake_mask_has(uint64_t mask, int gpio)
+{
+    return (mask & (1ULL << gpio)) != 0;
+}
+
 void app_main(void)
 {
     ESP_LOGI(TAG, "PaperColor photo frame — boot");
@@ -58,7 +66,17 @@ void app_main(void)
     config_store_init();
 
     esp_sleep_wakeup_cause_t wake = esp_sleep_get_wakeup_cause();
-    ESP_LOGI(TAG, "wake cause=%d", (int)wake);
+    uint64_t ext1_mask = esp_sleep_get_ext1_wakeup_status();
+    bool wake_by_top = (wake == ESP_SLEEP_WAKEUP_EXT0) ||
+                       (wake == ESP_SLEEP_WAKEUP_EXT1 &&
+                        wake_mask_has(ext1_mask, BOARD_BTN_TOP_GPIO));
+    bool wake_by_side = (wake == ESP_SLEEP_WAKEUP_EXT1 &&
+                         (wake_mask_has(ext1_mask, BOARD_BTN_UP_GPIO) ||
+                          wake_mask_has(ext1_mask, BOARD_BTN_DOWN_GPIO)));
+    bool wake_by_timer = (wake == ESP_SLEEP_WAKEUP_TIMER);
+    bool wifi_enabled = (wake == ESP_SLEEP_WAKEUP_UNDEFINED) || wake_by_top;
+    ESP_LOGI(TAG, "wake cause=%d ext1=0x%llx wifi=%d",
+             (int)wake, (unsigned long long)ext1_mask, wifi_enabled);
 
     // Enable the SD rail through the M5PM1 PMIC.  The EPD rail intentionally
     // stays off here and is powered only inside the display refresh path.
@@ -94,25 +112,64 @@ void app_main(void)
         return;
     }
 
-    // Bring up the captive-portal stack.
-    wifi_ap_start();
-    dns_hijack_start(wifi_ap_get_ip());
-    http_server_start();
+    // Bring up the captive-portal stack only when the user explicitly wants
+    // Wi-Fi (reset boot or top-button wake). Timer and side-button wakeups
+    // are one-shot refreshes and stay radio-off.
+    if (wifi_enabled) {
+        wifi_ap_start();
+        if (wifi_ap_has_ap()) {
+            dns_hijack_start(wifi_ap_get_ip());
+        }
+        http_server_start();
+    }
 
-    if (power_manager_start() != 0) {
+    bool queued_refresh = false;
+    if (wake_by_timer) {
+        ESP_LOGI(TAG, "timer wake: queueing scheduled refresh");
+        queued_refresh = (loop_display_request_next() == 0);
+    } else if (wake_by_side) {
+        ESP_LOGI(TAG, "side-button wake: queueing refresh");
+        queued_refresh = (loop_display_request_next() == 0);
+    } else if (wifi_enabled) {
+        // Fresh power-on / reset: if the library is empty, push the welcome
+        // card immediately so the user sees the per-device Wi-Fi credentials
+        // without having to press anything.
+        photo_meta_t one = {0};
+        if (photo_store_list(&one, 1) == 0) {
+            ESP_LOGI(TAG, "empty library: queueing welcome refresh");
+            queued_refresh = (loop_display_request_next() == 0);
+        }
+    }
+
+    power_manager_config_t pm_cfg = {
+        .wifi_enabled = wifi_enabled,
+        .sleep_when_display_idle = !wifi_enabled && !wake_by_side,
+        .button_refresh_wake = !wifi_enabled && wake_by_side,
+    };
+    if ((wake_by_timer || wake_by_side) && !queued_refresh) {
+        ESP_LOGW(TAG, "wake refresh queue failed; will sleep when display is idle");
+        pm_cfg.sleep_when_display_idle = true;
+        pm_cfg.button_refresh_wake = false;
+    }
+
+    if (power_manager_start(&pm_cfg) != 0) {
         ESP_LOGE(TAG, "power_manager_start failed");
         return;
     }
 
-    if (wake == ESP_SLEEP_WAKEUP_TIMER) {
-        ESP_LOGI(TAG, "timer wake: queueing scheduled refresh");
-        (void)loop_display_request_next();
-    }
-
     log_heap("after-init");
-    ESP_LOGI(TAG, "ready — connect to SSID '%s' (%s)",
-             config_get_wifi_ap_ssid(),
-             config_get_wifi_ap_password()[0] ? "password set" : "open");
+    if (wifi_enabled) {
+        if (wifi_ap_has_ap()) {
+            ESP_LOGI(TAG, "ready — AP SSID '%s' (%s)",
+                     config_get_wifi_ap_ssid(),
+                     config_get_wifi_ap_password()[0] ? "password set" : "open");
+        }
+        if (wifi_ap_has_sta()) {
+            ESP_LOGI(TAG, "ready — STA mode connecting; use http://papercolor.local/ after it gets an IP");
+        }
+    } else {
+        ESP_LOGI(TAG, "ready — Wi-Fi off for one-shot low-power refresh");
+    }
 
     // The worker handles its own timing; main() can exit.
 }

@@ -35,15 +35,27 @@
 #include "board_pins.h"
 #include "pm1.h"
 #include "battery_overlay.h"
+#include "welcome_overlay.h"
 #include "wifi_ap.h"
 
 static const char *TAG = "loop_display";
+
+// Embedded welcome panels: pre-dithered 400x600 4bpp framebuffers that the
+// device shows when the user's photo library is empty. Each side-button press
+// in that state toggles between zh and en.
+extern const uint8_t _binary_welcome_zh_bin_start[] asm("_binary_welcome_zh_bin_start");
+extern const uint8_t _binary_welcome_zh_bin_end[]   asm("_binary_welcome_zh_bin_end");
+extern const uint8_t _binary_welcome_en_bin_start[] asm("_binary_welcome_en_bin_start");
+extern const uint8_t _binary_welcome_en_bin_end[]   asm("_binary_welcome_en_bin_end");
+
+static int s_welcome_lang = 0;  // 0 = zh, 1 = en
 
 typedef enum {
     CMD_NEXT     = 1,
     CMD_SHOW_OPT = 2,
     CMD_FILL_INK = 3,
     CMD_MIX_PATCH = 4,
+    CMD_WELCOME  = 5,
 } cmd_kind_t;
 
 typedef struct {
@@ -112,7 +124,7 @@ static uint8_t read_battery_percent(void)
 
 static int display_fb(uint8_t *fb, bool draw_battery)
 {
-    if (draw_battery) {
+    if (draw_battery && config_get_battery_icon_enabled()) {
         battery_overlay_draw(fb, read_battery_percent());
     }
     int64_t t0 = esp_timer_get_time();
@@ -238,6 +250,43 @@ static int run_mix_patch(const uint8_t *ink, const uint8_t *weight, uint8_t n)
     return rc;
 }
 
+// First-run welcome — paint the embedded zh/en welcome panel and overlay the
+// per-device SSID and password. Called from the worker when photo_store has
+// nothing to show; lang flips on every invocation so consecutive side-button
+// presses cycle the language without requiring a separate command type.
+static int run_welcome(int lang)
+{
+    const uint8_t *src;
+    size_t src_len;
+    if (lang == 1) {
+        src = _binary_welcome_en_bin_start;
+        src_len = (size_t)(_binary_welcome_en_bin_end - _binary_welcome_en_bin_start);
+    } else {
+        src = _binary_welcome_zh_bin_start;
+        src_len = (size_t)(_binary_welcome_zh_bin_end - _binary_welcome_zh_bin_start);
+    }
+    size_t fb_bytes = (size_t)(EPD_4IN0E_WIDTH / 2) * EPD_4IN0E_HEIGHT;
+    if (src_len != fb_bytes) {
+        ESP_LOGE(TAG, "welcome bin size %u != %u",
+                 (unsigned)src_len, (unsigned)fb_bytes);
+        return -1;
+    }
+    uint8_t *fb = heap_caps_aligned_alloc(16, fb_bytes,
+                                          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!fb) {
+        fb = heap_caps_aligned_alloc(16, fb_bytes,
+                                     MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    }
+    if (!fb) return -1;
+    memcpy(fb, src, fb_bytes);
+    welcome_overlay_draw(fb, lang,
+                         config_get_wifi_ap_ssid(),
+                         config_get_wifi_ap_password());
+    int rc = display_fb(fb, false);
+    heap_caps_free(fb);
+    return rc;
+}
+
 // Fast path — read a pre-dithered 4bpp framebuffer straight from disk and
 // push it to the panel.  Used when the browser-side WASM pipeline has already
 // produced /sdcard/photos/<base>.bin.
@@ -344,8 +393,11 @@ static void worker(void *arg)
     for (;;) {
         display_cmd_t cmd = {0};
         uint32_t int_s = config_get_loop_interval_s();
+        TickType_t wait_ticks = int_s == CONFIG_LOOP_INTERVAL_NEVER_S
+                                    ? portMAX_DELAY
+                                    : pdMS_TO_TICKS(int_s * 1000U);
         s_worker_idle = true;
-        BaseType_t got = xQueueReceive(s_q, &cmd, pdMS_TO_TICKS((uint32_t)int_s * 1000U));
+        BaseType_t got = xQueueReceive(s_q, &cmd, wait_ticks);
         s_worker_idle = false;
 
         if (got != pdTRUE) {
@@ -377,13 +429,31 @@ static void worker(void *arg)
             continue;
         }
 
+        if (cmd.kind == CMD_WELCOME) {
+            // Long-press recovery: show credentials even when the library is
+            // non-empty. Don't flip s_welcome_lang — the user is holding the
+            // button to read the AP info, not to cycle languages.
+            ESP_LOGI(TAG, "forced welcome (lang=%d)", s_welcome_lang);
+            (void)run_welcome(s_welcome_lang);
+            photo_store_set_active(NULL);
+            continue;
+        }
+
         char name[PHOTO_NAME_MAX];
         if (cmd.kind == CMD_SHOW_OPT && cmd.name[0]) {
             strncpy(name, cmd.name, sizeof name - 1);
             name[sizeof name - 1] = 0;
         } else {
             if (resolve_next(name, sizeof name) != 0) {
-                ESP_LOGW(TAG, "no photos on SD — sleeping");
+                // Empty library: paint the bundled welcome card and flip the
+                // language so the next side-button press lands on the other
+                // localisation. This is the only state where ▲▼ doesn't
+                // advance through photos.
+                int lang = s_welcome_lang;
+                s_welcome_lang = (s_welcome_lang + 1) % 2;
+                ESP_LOGI(TAG, "no photos — showing welcome (lang=%d)", lang);
+                (void)run_welcome(lang);
+                photo_store_set_active(NULL);
                 continue;
             }
         }
@@ -408,7 +478,7 @@ static void worker(void *arg)
             }
             rc = run_pipeline(path);
         }
-        if (rc == 0) {
+        if (rc == 0 && uxQueueMessagesWaiting(s_q) == 0) {
             photo_store_set_active(name);
         }
     }
@@ -435,13 +505,22 @@ int loop_display_request_show(const char *name)
     // Explicit "Show Now" should override stale queued Next/Show commands.
     // The current refresh is not interrupted; this only clears pending work.
     xQueueReset(s_q);
-    return xQueueSend(s_q, &c, 0) == pdTRUE ? 0 : -1;
+    if (xQueueSend(s_q, &c, 0) != pdTRUE) return -1;
+    photo_store_set_active(name);
+    return 0;
 }
 
 int loop_display_request_next(void)
 {
     if (!s_q) return -1;
     display_cmd_t c = { .kind = CMD_NEXT };
+    return xQueueSend(s_q, &c, 0) == pdTRUE ? 0 : -1;
+}
+
+int loop_display_request_welcome(void)
+{
+    if (!s_q) return -1;
+    display_cmd_t c = { .kind = CMD_WELCOME };
     return xQueueSend(s_q, &c, 0) == pdTRUE ? 0 : -1;
 }
 

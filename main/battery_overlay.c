@@ -73,7 +73,9 @@ void battery_overlay_draw(uint8_t *fb, uint8_t percent)
             n++;
         }
     }
-    uint8_t ink = (n && (luma_sum / n) > 145) ? EPD_INK_BLACK : EPD_INK_WHITE;
+    uint8_t ink = percent < 10
+                    ? EPD_INK_RED
+                    : ((n && (luma_sum / n) > 145) ? EPD_INK_BLACK : EPD_INK_WHITE);
 
     const int body_w = BAT_W - 4;
     const int nub_x = BAT_X + body_w + 1;
