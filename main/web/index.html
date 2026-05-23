@@ -1646,6 +1646,79 @@ input[type=file] { display: none; }
   color: var(--ink-2);
 }
 
+/* Deferred-busy overlay — arms when an operation exceeds the snappy budget. */
+.busy {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: env(safe-area-inset-top) var(--margin) env(safe-area-inset-bottom);
+  background:
+    radial-gradient(circle at 30% 18%, rgba(255,255,255,0.06), transparent 60%),
+    rgba(41,25,15,0.42);
+  backdrop-filter: blur(6px) saturate(1.05);
+  -webkit-backdrop-filter: blur(6px) saturate(1.05);
+}
+.busy.is-on {
+  display: flex;
+  animation: busyIn 160ms ease;
+}
+@keyframes busyIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.busy__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 22px 26px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 28% 22%, rgba(255,255,255,0.86), transparent 58%),
+    linear-gradient(150deg, #fff7e6 0%, #f3dfbb 100%);
+  box-shadow: 0 28px 56px rgba(41,25,15,0.32), inset 0 1px 0 rgba(255,255,255,0.6);
+  max-width: min(82vw, 320px);
+  text-align: center;
+}
+.busy__spinner {
+  position: relative;
+  width: 44px;
+  height: 44px;
+}
+.busy__spinner::before,
+.busy__spinner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+.busy__spinner::before {
+  border: 3px solid rgba(41,25,15,0.14);
+}
+.busy__spinner::after {
+  border: 3px solid transparent;
+  border-top-color: var(--ink);
+  animation: spin 0.9s cubic-bezier(.5,.15,.5,.85) infinite;
+}
+.busy__label {
+  font-family: "Avenir Next Condensed", "DIN Condensed", "PingFang SC", sans-serif;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+  line-height: 1.1;
+}
+.busy__detail {
+  font-size: 13px;
+  color: var(--ink-3);
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+}
+
 /* Toast */
 .toast {
   position: fixed;
@@ -2200,6 +2273,16 @@ input[type=file] { display: none; }
   </div>
 </div>
 
+<!-- Deferred-busy overlay.  Arms after a slow-budget timeout so quick ops
+     stay invisible, but anything > ~700 ms gets a clear status block. -->
+<div id="busy" class="busy" role="status" aria-live="polite" aria-hidden="true">
+  <div class="busy__card">
+    <div class="busy__spinner" aria-hidden="true"></div>
+    <div class="busy__label" id="busy-label" data-i18n="busy.working">Working…</div>
+    <div class="busy__detail" id="busy-detail"></div>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <script src="/i18n.js"></script>
@@ -2317,6 +2400,93 @@ function requireWasmOrShowSupport() {
   openSupportSheet();
   return false;
 }
+
+// ---------- Deferred-busy overlay ----------
+// Mobile users notice anything above ~700 ms.  withBusy() arms a timer; if
+// the wrapped promise resolves before it fires, nothing flashes.  When it
+// fires, we show a spinner card with a label/detail describing which job is
+// taking time, so the user knows we're alive and what's happening.
+//
+// Reference-counted: nested calls (Send uploads JPG + BIN + JSON inside one
+// outer "saving" wrapper) share one card and only hide once all jobs end.
+const busyEl     = document.getElementById('busy');
+const busyLabelEl  = document.getElementById('busy-label');
+const busyDetailEl = document.getElementById('busy-detail');
+const BUSY_DEFAULT_DELAY = 700;
+const _busyStack = [];   // {timer, labelKey, detailKey, detailText, vars}
+function _renderBusy() {
+  if (!busyEl) return;
+  if (_busyStack.length === 0) {
+    busyEl.classList.remove('is-on');
+    busyEl.setAttribute('aria-hidden', 'true');
+    return;
+  }
+  const top = _busyStack[_busyStack.length - 1];
+  if (busyLabelEl) {
+    busyLabelEl.textContent = top.labelKey ? tr(top.labelKey, top.vars) : tr('busy.working');
+  }
+  if (busyDetailEl) {
+    let detail = '';
+    if (top.detailText) detail = top.detailText;
+    else if (top.detailKey) detail = tr(top.detailKey, top.vars);
+    busyDetailEl.textContent = detail;
+    busyDetailEl.style.display = detail ? '' : 'none';
+  }
+  busyEl.classList.add('is-on');
+  busyEl.setAttribute('aria-hidden', 'false');
+}
+function _showBusyEntry(entry) {
+  _busyStack.push(entry);
+  if (_busyStack.length === 1 || busyEl.classList.contains('is-on')) {
+    _renderBusy();
+  }
+}
+function _disarmBusyEntry(entry) {
+  const idx = _busyStack.indexOf(entry);
+  if (idx === -1) return;
+  if (entry.timer) { clearTimeout(entry.timer); entry.timer = null; }
+  _busyStack.splice(idx, 1);
+  _renderBusy();
+}
+
+// withBusy(fn, opts)
+//   opts.label    : i18n key, default 'busy.working'
+//   opts.detail   : i18n key for the second line (optional)
+//   opts.detailText: literal string fallback
+//   opts.delayMs  : arm timeout, default 700 ms
+//   opts.vars     : interpolation vars for the keys
+async function withBusy(fn, opts) {
+  opts = opts || {};
+  const entry = {
+    timer: null,
+    labelKey: opts.label || 'busy.working',
+    detailKey: opts.detail,
+    detailText: opts.detailText,
+    vars: opts.vars,
+  };
+  entry.timer = setTimeout(() => {
+    entry.timer = null;
+    _showBusyEntry(entry);
+  }, opts.delayMs != null ? opts.delayMs : BUSY_DEFAULT_DELAY);
+  try {
+    return await fn();
+  } finally {
+    _disarmBusyEntry(entry);
+  }
+}
+// Update labels live (e.g., when crossing into a new phase of a long op).
+function setBusyLabel(labelKey, detailKey, vars) {
+  if (_busyStack.length === 0) return;
+  const top = _busyStack[_busyStack.length - 1];
+  top.labelKey = labelKey || top.labelKey;
+  top.detailKey = detailKey;
+  top.detailText = null;
+  top.vars = vars;
+  if (busyEl.classList.contains('is-on')) _renderBusy();
+}
+window.addEventListener('paper-i18n-change', () => {
+  if (busyEl && busyEl.classList.contains('is-on')) _renderBusy();
+});
 
 // ---------- API ----------
 // Panel native resolution (TW × TH) and 1.5× supersample resolution
@@ -3256,7 +3426,8 @@ function openDetail(p) {
 document.getElementById('btn-delete').onclick = async () => {
   if (!detailTarget) return;
   try {
-    const r = await api.del(detailTarget.name);
+    const r = await withBusy(() => api.del(detailTarget.name),
+                             {label: 'busy.deleting'});
     if (!r.ok) throw new Error('HTTP ' + r.status);
     detailSheet.classList.remove('is-open');
     toastKey('toast.deleted');
@@ -3269,7 +3440,8 @@ document.getElementById('btn-delete').onclick = async () => {
 document.getElementById('btn-show').onclick = async () => {
   if (!detailTarget) return;
   try {
-    const r = await api.show(detailTarget.name);
+    const r = await withBusy(() => api.show(detailTarget.name),
+                             {label: 'busy.sendingToFrame'});
     if (!r.ok) throw new Error('HTTP ' + r.status);
     toastKey('toast.refreshingDisplay');
     detailSheet.classList.remove('is-open');
@@ -3289,6 +3461,7 @@ document.getElementById('btn-show').onclick = async () => {
 document.getElementById('btn-tune').onclick = async () => {
   if (!detailTarget) return;
   if (!requireWasmOrShowSupport()) return;
+  await withBusy(async () => {
   try {
     const resp = await fetch(photoUrl(detailTarget, {noCache: true}), {cache: 'no-store'});
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -3330,6 +3503,7 @@ document.getElementById('btn-tune').onclick = async () => {
     toastKey('toast.cannotLoadPhoto');
     console.error(e);
   }
+  }, {label: 'busy.loadingPhoto'});
 };
 
 // ---------- close handlers ----------
@@ -3353,7 +3527,7 @@ syncSheetLock();
 
 // ---------- Next ----------
 document.getElementById('btn-next').onclick = async () => {
-  await api.next();
+  await withBusy(() => api.next(), {label: 'busy.nextPhoto'});
   toastKey('toast.nextPhoto');
   setTimeout(refresh, 1500);
 };
@@ -3602,7 +3776,8 @@ function syncSettingsReadouts(cfg) {
 }
 async function saveConfigSetting(patch) {
   try {
-    const r = await api.setCfg(patch);
+    const r = await withBusy(() => api.setCfg(patch),
+                             {label: 'busy.saving'});
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const cfg = await r.json();
     syncSettingsReadouts(cfg);
@@ -5520,13 +5695,20 @@ document.getElementById('btn-send').onclick = async () => {
   if (!xform.src) return;
   const sendBtn = document.getElementById('btn-send');
   sendBtn.disabled = true;
+  // Single busy card that survives the whole Send.  We call setBusyLabel as
+  // we cross phase boundaries (encode → dither → upload → refresh) so when
+  // the overlay arms after the slow-budget, the user sees what we're doing
+  // right now rather than the original "Working…" label.
+  await withBusy(async () => {
   try {
+    setBusyLabel('busy.encoding');
     toastKey('toast.encoding');
     const canvasHi = bakeCanvas();
     // Snapshot before any adjust/dither work: the web homepage should show
     // the cropped original, while only the .bin gets the adjust settings.
     const jpgPromise = encodeJpeg(cloneCanvas(canvasHi));
 
+    setBusyLabel('busy.dithering');
     toastKey('toast.dithering');
     const binBytes = await ditherCanvas(canvasHi);
 
@@ -5534,9 +5716,11 @@ document.getElementById('btn-send').onclick = async () => {
     if (!jpgBlob) throw new Error('JPEG encode failed');
 
     const base = uploadBaseOverride || ('p_' + Date.now());
+    setBusyLabel('busy.uploadingJpg');
     // Upload JPG first so the device gallery has it even if the .bin fails.
     let r = await api.upload(base + '.jpg', jpgBlob, 'image/jpeg');
     if (!r.ok) throw new Error(await uploadStatusMessage(r, 'JPG'));
+    setBusyLabel('busy.uploadingBin');
     r = await api.upload(base + '.bin', new Blob([binBytes]), 'application/octet-stream');
     if (!r.ok) throw new Error(await uploadStatusMessage(r, 'BIN'));
 
@@ -5564,6 +5748,7 @@ document.getElementById('btn-send').onclick = async () => {
     // Refresh the device display to the photo we just baked — same flow for
     // a brand-new upload and for a re-tune. The .bin fast path on the device
     // means the panel updates in <1 s after the EPD finishes its hold.
+    setBusyLabel('busy.sendingToFrame');
     try { await api.show(base + '.jpg'); } catch (e) { /* best effort */ }
     toastKey('toast.uploaded');
     refresh();
@@ -5573,6 +5758,7 @@ document.getElementById('btn-send').onclick = async () => {
   } finally {
     sendBtn.disabled = false;
   }
+  }, {label: 'busy.saving'});
 };
 
 // Bake the visible crop directly from the source bitmap into an SW × SH

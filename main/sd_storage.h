@@ -12,8 +12,9 @@ extern "C" {
 // Returns 0 on success, negative on failure.
 int sd_storage_mount(bool init_bus);
 
-// Mount the internal SPIFFS fallback at /spiffs. Used when SD init/mount fails.
-// Returns 0 on success, negative on failure.
+// Mount the internal LittleFS storage at /littlefs.  Used when SD init/mount
+// fails, and also as the primary store on SD-less boards.  Returns 0 on
+// success, negative on failure.
 int sd_storage_mount_internal(void);
 
 // Unmount and free the card.

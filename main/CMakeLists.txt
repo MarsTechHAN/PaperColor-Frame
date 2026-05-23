@@ -40,7 +40,6 @@ idf_component_register(
         esp_driver_rmt
         sdmmc
         fatfs
-        spiffs
         vfs
         esp_timer
         esp_rom
@@ -50,6 +49,7 @@ idf_component_register(
         esp_http_server
         lwip
         nvs_flash
+        joltwallet__littlefs
     EMBED_FILES "${WEB_GZ}" "${WASM_GZ}" "${I18N_GZ}" "${WELCOME_ZH}" "${WELCOME_EN}"
 )
 

@@ -10,8 +10,7 @@ extern "C" {
 #endif
 
 // Default location when SD is available. If SD mount fails, main switches this
-// module to the internal SPIFFS mount and photos live directly in /spiffs
-// because SPIFFS has a flat namespace.
+// module to the internal LittleFS mount and photos live under /littlefs/photos.
 #define PHOTO_DIR        "/sdcard/photos"
 #define PHOTO_DIR_MAX    48
 #define PHOTO_NAME_MAX   96

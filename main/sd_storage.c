@@ -21,14 +21,16 @@
 #include "driver/sdspi_host.h"
 #include "sdmmc_cmd.h"
 #include "esp_vfs_fat.h"
-#include "esp_spiffs.h"
+#include "esp_littlefs.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 
 static const char *TAG = "sd";
 static sdmmc_card_t *s_card = NULL;
-static bool s_spiffs_mounted = false;
+static bool s_littlefs_mounted = false;
 static const char *MOUNT_POINT = "/sdcard";
-static const char *INTERNAL_MOUNT_POINT = "/spiffs";
+static const char *INTERNAL_MOUNT_POINT = "/littlefs";
+static const char *INTERNAL_PARTITION   = "littlefs";
 
 int sd_storage_mount(bool init_bus)
 {
@@ -78,25 +80,33 @@ int sd_storage_mount(bool init_bus)
 
 int sd_storage_mount_internal(void)
 {
-    esp_vfs_spiffs_conf_t conf = {
+    // joltwallet/littlefs.  Random writes are O(log n) instead of SPIFFS's
+    // full-partition GC scan, so the upload latency stays predictable as the
+    // store fills up.  format_if_mount_failed lets first boot (or anyone
+    // upgrading from the old SPIFFS image) format the partition once.
+    int64_t t0 = esp_timer_get_time();
+    esp_vfs_littlefs_conf_t conf = {
         .base_path = INTERNAL_MOUNT_POINT,
-        .partition_label = "storage",
-        .max_files = 8,
+        .partition_label = INTERNAL_PARTITION,
         .format_if_mount_failed = true,
+        .dont_mount = false,
     };
-    esp_err_t err = esp_vfs_spiffs_register(&conf);
+    esp_err_t err = esp_vfs_littlefs_register(&conf);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "SPIFFS fallback mount failed: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "LittleFS mount failed: %s", esp_err_to_name(err));
         return -1;
     }
-    s_spiffs_mounted = true;
+    s_littlefs_mounted = true;
+    int64_t t1 = esp_timer_get_time();
 
     size_t total = 0, used = 0;
-    if (esp_spiffs_info(conf.partition_label, &total, &used) == ESP_OK) {
-        ESP_LOGW(TAG, "using internal SPIFFS fallback at %s (%u/%u bytes used)",
-                 INTERNAL_MOUNT_POINT, (unsigned)used, (unsigned)total);
+    if (esp_littlefs_info(conf.partition_label, &total, &used) == ESP_OK) {
+        ESP_LOGI(TAG, "LittleFS mounted at %s in %lld ms (%u/%u bytes used)",
+                 INTERNAL_MOUNT_POINT, (long long)((t1 - t0) / 1000),
+                 (unsigned)used, (unsigned)total);
     } else {
-        ESP_LOGW(TAG, "using internal SPIFFS fallback at %s", INTERNAL_MOUNT_POINT);
+        ESP_LOGI(TAG, "LittleFS mounted at %s in %lld ms",
+                 INTERNAL_MOUNT_POINT, (long long)((t1 - t0) / 1000));
     }
     return 0;
 }
@@ -107,9 +117,9 @@ void sd_storage_unmount(void)
         esp_vfs_fat_sdcard_unmount(MOUNT_POINT, s_card);
         s_card = NULL;
     }
-    if (s_spiffs_mounted) {
-        esp_vfs_spiffs_unregister("storage");
-        s_spiffs_mounted = false;
+    if (s_littlefs_mounted) {
+        esp_vfs_littlefs_unregister(INTERNAL_PARTITION);
+        s_littlefs_mounted = false;
     }
 }
 

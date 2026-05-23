@@ -22,10 +22,18 @@
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "esp_app_desc.h"
+#include "esp_timer.h"
 
 #include "photo_store.h"
 #include "config_store.h"
 #include "loop_display.h"
+
+// Wall-clock helpers for handler timing.  We log a one-line summary per
+// request when it crosses HTTP_SLOW_LOG_MS so the serial trail surfaces the
+// stalls users see without spamming the log on fast requests.
+#define HTTP_SLOW_LOG_MS  150
+static inline int64_t now_us(void) { return esp_timer_get_time(); }
+static inline int     us_to_ms(int64_t us) { return (int)(us / 1000); }
 
 static const char *TAG = "http";
 
@@ -202,8 +210,10 @@ static esp_err_t h_i18n(httpd_req_t *req)
 // GET /api/list  → {"active":"...", "photos":[{name,size,mtime},...]}
 static esp_err_t h_list(httpd_req_t *req)
 {
+    int64_t t0 = now_us();
     photo_meta_t list[64];
     int n = photo_store_list(list, 64);
+    int64_t t_scan = now_us();
     if (n < 0) return send_json(req, "{\"photos\":[],\"active\":null}");
 
     // Build JSON manually — keeps deps lean.
@@ -228,12 +238,18 @@ static esp_err_t h_list(httpd_req_t *req)
     off += snprintf(buf + off, cap - off, "]}");
     esp_err_t rc = send_json(req, buf);
     free(buf);
+    int total_ms = us_to_ms(now_us() - t0);
+    if (total_ms >= HTTP_SLOW_LOG_MS) {
+        ESP_LOGW(TAG, "slow /api/list: %d photos, scan=%d ms, total=%d ms",
+                 n, us_to_ms(t_scan - t0), total_ms);
+    }
     return rc;
 }
 
 // GET /api/photo/<name>  → stream the raw JPG.
 static esp_err_t h_photo_get(httpd_req_t *req)
 {
+    int64_t t0 = now_us();
     char name[PHOTO_NAME_MAX];
     if (url_tail_name(req->uri, "/api/photo/", name, sizeof name) != 0) {
         httpd_resp_set_status(req, "400 Bad Request");
@@ -255,22 +271,39 @@ static esp_err_t h_photo_get(httpd_req_t *req)
     httpd_resp_set_type(req, mime);
     httpd_resp_set_hdr(req, "Cache-Control", "public, max-age=86400");
 
-    char chunk[1024];
+    // Wider chunks: fewer httpd_resp_send_chunk syscalls and fewer LittleFS
+    // page reads per HTTP frame.  8 KiB matches one TCP segment on typical
+    // browsers and stays well under the 16 KiB httpd stack budget.
+    char chunk[8192];
+    size_t total = 0;
     size_t r;
     while ((r = fread(chunk, 1, sizeof chunk, fp)) > 0) {
         if (httpd_resp_send_chunk(req, chunk, r) != ESP_OK) {
             fclose(fp);
             return ESP_FAIL;
         }
+        total += r;
     }
     fclose(fp);
     httpd_resp_send_chunk(req, NULL, 0);
+    int total_ms = us_to_ms(now_us() - t0);
+    if (total_ms >= HTTP_SLOW_LOG_MS) {
+        ESP_LOGW(TAG, "slow /api/photo GET %s: %u bytes in %d ms",
+                 name, (unsigned)total, total_ms);
+    }
     return ESP_OK;
 }
 
 // POST /api/upload/<name>  → save to <active-store>/photos/<name>.tmp, then rename.
+//
+// We log phase timing (recv + write + close+rename) so a slow upload tells us
+// whether the network or the filesystem stalled.  An 8 KiB recv buffer keeps
+// LittleFS writes aligned with the 4 KiB erase block (two pages per recv,
+// no read-modify-write across boundaries) and halves the recv-loop iteration
+// count vs. the old 2 KiB.
 static esp_err_t h_upload(httpd_req_t *req)
 {
+    int64_t t0 = now_us();
     char name[PHOTO_NAME_MAX];
     if (url_tail_name(req->uri, "/api/upload/", name, sizeof name) != 0) {
         return send_text(req, "400 Bad Request", "text/plain", "bad name");
@@ -285,33 +318,59 @@ static esp_err_t h_upload(httpd_req_t *req)
     }
     photo_writer_t *w = photo_writer_open(name);
     if (!w) return send_photo_store_error(req, "open failed");
+    int64_t t_open = now_us();
 
-    char buf[2048];
+    // Allocate the recv buffer on the heap so the httpd task stack stays slim.
+    // PSRAM is fine — the data goes straight to flash after the next loop iter.
+    const int CHUNK = 8192;
+    char *buf = malloc(CHUNK);
+    if (!buf) {
+        photo_writer_close(w, false);
+        return send_text(req, "500 Internal Server Error", "text/plain", "out of memory");
+    }
+    int64_t recv_us = 0, write_us = 0;
     int remaining = req->content_len;
     while (remaining > 0) {
+        int64_t ts = now_us();
         int got = httpd_req_recv(req, buf,
-                                 remaining > (int)sizeof buf ? (int)sizeof buf : remaining);
+                                 remaining > CHUNK ? CHUNK : remaining);
+        recv_us += now_us() - ts;
         if (got <= 0) {
             if (got == HTTPD_SOCK_ERR_TIMEOUT) continue;
             photo_writer_close(w, false);
+            free(buf);
             return ESP_FAIL;
         }
+        ts = now_us();
         if (photo_writer_feed(w, (uint8_t *)buf, got) != 0) {
             photo_writer_close(w, false);
+            free(buf);
             return send_photo_store_error(req, "write failed");
         }
+        write_us += now_us() - ts;
         remaining -= got;
     }
+    free(buf);
+    int64_t t_loop_end = now_us();
     if (photo_writer_close(w, true) != 0) {
         return send_photo_store_error(req, "rename failed");
     }
-    ESP_LOGI(TAG, "upload ok: %s (%d bytes)", name, req->content_len);
+    int64_t t_done = now_us();
+    int total_ms = us_to_ms(t_done - t0);
+    // Always log uploads — they're rare and the timing is gold for tuning.
+    ESP_LOGI(TAG, "upload ok: %s %d B in %d ms (open=%d recv=%d write=%d close=%d)",
+             name, req->content_len, total_ms,
+             us_to_ms(t_open - t0),
+             us_to_ms(recv_us),
+             us_to_ms(write_us),
+             us_to_ms(t_done - t_loop_end));
     return send_json(req, "{\"ok\":true}");
 }
 
 // DELETE /api/photo/<name>
 static esp_err_t h_photo_del(httpd_req_t *req)
 {
+    int64_t t0 = now_us();
     char name[PHOTO_NAME_MAX];
     if (url_tail_name(req->uri, "/api/photo/", name, sizeof name) != 0) {
         return send_text(req, "400 Bad Request", "text/plain", "bad name");
@@ -319,7 +378,12 @@ static esp_err_t h_photo_del(httpd_req_t *req)
     if (photo_store_delete(name) != 0) {
         return send_text(req, "500 Internal Server Error", "text/plain", "delete failed");
     }
-    return send_json(req, "{\"ok\":true}");
+    esp_err_t rc = send_json(req, "{\"ok\":true}");
+    int total_ms = us_to_ms(now_us() - t0);
+    if (total_ms >= HTTP_SLOW_LOG_MS) {
+        ESP_LOGW(TAG, "slow /api/photo DELETE %s: %d ms", name, total_ms);
+    }
+    return rc;
 }
 
 // POST /api/display/<name>  → queue an explicit refresh.

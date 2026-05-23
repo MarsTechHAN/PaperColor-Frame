@@ -212,7 +212,18 @@
       'support.addrCopy': 'Copy',
       'support.addrCopied': 'Copied',
       'support.addrCopyFailed': 'Copy failed',
-      'support.backToGallery': 'Back to gallery'
+      'support.backToGallery': 'Back to gallery',
+
+      'busy.working': 'Working…',
+      'busy.saving': 'Saving…',
+      'busy.encoding': 'Encoding photo…',
+      'busy.dithering': 'Generating screen image…',
+      'busy.uploadingJpg': 'Uploading photo…',
+      'busy.uploadingBin': 'Uploading screen image…',
+      'busy.sendingToFrame': 'Sending to frame…',
+      'busy.loadingPhoto': 'Loading photo…',
+      'busy.deleting': 'Deleting…',
+      'busy.nextPhoto': 'Switching to next photo…'
     },
     zh: {
       'app.device': 'PaperColor 相框',
@@ -421,7 +432,18 @@
       'support.addrCopy': '复制',
       'support.addrCopied': '已复制',
       'support.addrCopyFailed': '复制失败',
-      'support.backToGallery': '返回照片墙'
+      'support.backToGallery': '返回照片墙',
+
+      'busy.working': '处理中…',
+      'busy.saving': '保存中…',
+      'busy.encoding': '正在编码…',
+      'busy.dithering': '正在生成屏幕图像…',
+      'busy.uploadingJpg': '上传照片中…',
+      'busy.uploadingBin': '上传屏幕图像中…',
+      'busy.sendingToFrame': '发送到相框…',
+      'busy.loadingPhoto': '正在打开照片…',
+      'busy.deleting': '正在删除…',
+      'busy.nextPhoto': '切换下一张中…'
     }
   };
 

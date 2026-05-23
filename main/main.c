@@ -86,18 +86,18 @@ void app_main(void)
     }
 
     // SD on the shared SPI bus. If no card is present, fall back to internal
-    // SPIFFS so the web UI can still save a small number of photos.
+    // LittleFS so the web UI can still save photos to flash.
     if (sd_storage_mount(true) != 0) {
-        ESP_LOGW(TAG, "SD mount failed — using internal SPIFFS fallback");
+        ESP_LOGW(TAG, "SD mount failed — using internal LittleFS fallback");
         if (sd_storage_mount_internal() != 0 ||
-            photo_store_set_mount_point("/spiffs") != 0) {
+            photo_store_set_mount_point("/littlefs") != 0) {
             ESP_LOGE(TAG, "internal storage fallback failed — abort");
             return;
         }
     } else {
         photo_store_set_mount_point("/sdcard");
     }
-    if (strcmp(photo_store_dir(), "/spiffs") == 0) {
+    if (strncmp(photo_store_dir(), "/littlefs", 9) == 0) {
         pm1_set_sd_power(false);
     }
     if (photo_store_init() != 0) {

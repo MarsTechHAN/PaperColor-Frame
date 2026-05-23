@@ -15,7 +15,8 @@
 #include <ctype.h>
 
 #include "esp_log.h"
-#include "esp_spiffs.h"
+#include "esp_littlefs.h"
+#include "esp_timer.h"
 
 static const char *TAG = "photo_store";
 
@@ -45,12 +46,9 @@ int photo_store_set_mount_point(const char *mount_point)
         set_error(PHOTO_STORE_ERR_BAD_NAME);
         return -1;
     }
-    int n;
-    if (strcmp(mount_point, "/spiffs") == 0) {
-        n = snprintf(s_photo_dir, sizeof s_photo_dir, "%s", mount_point);
-    } else {
-        n = snprintf(s_photo_dir, sizeof s_photo_dir, "%s/photos", mount_point);
-    }
+    // Both backends (SD / LittleFS) use the same "<mount>/photos" layout — we
+    // dropped the SPIFFS flat-namespace branch when migrating to LittleFS.
+    int n = snprintf(s_photo_dir, sizeof s_photo_dir, "%s/photos", mount_point);
     if (n < 0 || (size_t)n >= sizeof s_photo_dir) {
         set_error(PHOTO_STORE_ERR_BAD_NAME);
         return -1;
@@ -77,10 +75,6 @@ int photo_store_init(void)
 {
     struct stat st;
     if (stat(s_photo_dir, &st) != 0) {
-        if (strcmp(s_photo_dir, "/spiffs") == 0) {
-            set_error(PHOTO_STORE_ERR_NONE);
-            return 0;
-        }
         if (mkdir(s_photo_dir, 0775) != 0) {
             ESP_LOGE(TAG, "mkdir %s failed: %d", s_photo_dir, errno);
             set_error(errno == ENOSPC ? PHOTO_STORE_ERR_NO_SPACE : PHOTO_STORE_ERR_IO);
@@ -168,9 +162,12 @@ int photo_store_list(photo_meta_t *out_list, int max_n)
 
 bool photo_store_free_bytes(uint64_t *free_bytes)
 {
-    if (strcmp(s_photo_dir, "/spiffs") != 0) return false;
+    // Only the LittleFS-backed store reports cheaply.  SD goes through fatfs,
+    // which would need a full FAT scan — skip the check there; the upload
+    // handler is content to discover ENOSPC via the write itself.
+    if (strncmp(s_photo_dir, "/littlefs", 9) != 0) return false;
     size_t total = 0, used = 0;
-    if (esp_spiffs_info("storage", &total, &used) != ESP_OK || total < used) {
+    if (esp_littlefs_info("littlefs", &total, &used) != ESP_OK || total < used) {
         return false;
     }
     *free_bytes = (uint64_t)(total - used);
@@ -246,6 +243,7 @@ int photo_writer_close(photo_writer_t *w, bool keep)
     if (!w) return -1;
     photo_store_error_t prior_error = s_last_error;
     int rc = 0;
+    int64_t t0 = esp_timer_get_time();
     if (w->fp) {
         if (fclose(w->fp) != 0) {
             set_error(errno == ENOSPC ? PHOTO_STORE_ERR_NO_SPACE : PHOTO_STORE_ERR_IO);
@@ -253,9 +251,12 @@ int photo_writer_close(photo_writer_t *w, bool keep)
         }
         w->fp = NULL;
     }
+    int64_t t_fclose = esp_timer_get_time();
     if (keep && rc == 0) {
         // Best-effort: remove pre-existing target then rename.  FATFS
-        // rename refuses to overwrite, so unlink first.
+        // rename refuses to overwrite; LittleFS rename is atomic but we keep
+        // the unlink for parity (and for the legacy SPIFFS image during the
+        // first boot after migration).
         unlink(w->final_path);
         if (rename(w->tmp_path, w->final_path) != 0) {
             ESP_LOGE(TAG, "rename %s -> %s failed: %d",
@@ -265,6 +266,13 @@ int photo_writer_close(photo_writer_t *w, bool keep)
         }
     } else {
         unlink(w->tmp_path);
+    }
+    int64_t t_done = esp_timer_get_time();
+    int close_ms  = (int)((t_fclose - t0) / 1000);
+    int rename_ms = (int)((t_done - t_fclose) / 1000);
+    if (close_ms + rename_ms >= 100) {
+        ESP_LOGI(TAG, "writer close %s: fclose=%d ms, rename=%d ms",
+                 w->final_path, close_ms, rename_ms);
     }
     if (rc == 0 && (keep || prior_error == PHOTO_STORE_ERR_NONE)) {
         set_error(PHOTO_STORE_ERR_NONE);
