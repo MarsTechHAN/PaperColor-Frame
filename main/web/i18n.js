@@ -196,7 +196,23 @@
       'toast.wifiPasswordCleared': 'Wi-Fi password removed after restart',
       'toast.wifiPasswordInvalid': 'Use no password, or enter 8-63 ASCII characters',
       'toast.wifiSsidInvalid': 'Use 0-32 printable ASCII characters for SSID',
-      'toast.networkRestart': 'Saved. Restart the frame to use the new network mode.'
+      'toast.networkRestart': 'Saved. Restart the frame to use the new network mode.',
+      'toast.supportAddrCopied': 'Address copied. Paste it in Safari or Chrome.',
+      'toast.supportAddrCopyFailed': 'Could not copy. Type the address into Safari or Chrome.',
+
+      'support.title': 'Browser update needed',
+      'support.heading': 'Open this page in Safari or Chrome',
+      'support.lede': 'PaperColor Frame uses WebAssembly to crop and dither photos in your browser. The current browser does not support it, so Upload and Adjust cannot run here.',
+      'support.step1': 'Open Safari or Chrome',
+      'support.step1Hint': 'In-app browsers (WeChat, Instagram, X) often ship without WebAssembly. Use the share button to open the page in Safari or Chrome.',
+      'support.step2': 'Visit the frame address',
+      'support.step2Hint': 'Type one of these into the address bar. Tap to copy.',
+      'support.addrMdnsLabel': 'mDNS name',
+      'support.addrIpLabel': 'When joined to the frame Wi-Fi',
+      'support.addrCopy': 'Copy',
+      'support.addrCopied': 'Copied',
+      'support.addrCopyFailed': 'Copy failed',
+      'support.backToGallery': 'Back to gallery'
     },
     zh: {
       'app.device': 'PaperColor 相框',
@@ -389,7 +405,23 @@
       'toast.wifiPasswordCleared': '重启后将取消 Wi-Fi 密码',
       'toast.wifiPasswordInvalid': '密码可留空；如需设置，请输入 8-63 位 ASCII 字符',
       'toast.wifiSsidInvalid': 'SSID 请使用 0-32 位可打印 ASCII 字符',
-      'toast.networkRestart': '已保存，重启后使用新的网络模式'
+      'toast.networkRestart': '已保存，重启后使用新的网络模式',
+      'toast.supportAddrCopied': '地址已复制，请到 Safari 或 Chrome 粘贴打开',
+      'toast.supportAddrCopyFailed': '复制失败，请在 Safari 或 Chrome 中手动输入地址',
+
+      'support.title': '请换个浏览器',
+      'support.heading': '请在 Safari 或 Chrome 中打开',
+      'support.lede': 'PaperColor 相框需要浏览器支持 WebAssembly 才能裁剪和抖色。当前浏览器不支持，无法继续上传或调整。',
+      'support.step1': '切换到 Safari 或 Chrome',
+      'support.step1Hint': '微信、Instagram、X 等应用内浏览器通常不支持 WebAssembly。请点击分享按钮，选择"在 Safari 中打开"或"在 Chrome 中打开"。',
+      'support.step2': '访问相框地址',
+      'support.step2Hint': '在地址栏输入下面任一地址，点击可复制。',
+      'support.addrMdnsLabel': 'mDNS 域名',
+      'support.addrIpLabel': '连接相框 Wi-Fi 时使用',
+      'support.addrCopy': '复制',
+      'support.addrCopied': '已复制',
+      'support.addrCopyFailed': '复制失败',
+      'support.backToGallery': '返回照片墙'
     }
   };
 
