@@ -1,0 +1,12 @@
+menu "Paper E6 Experimental"
+
+config EPD_PROBE
+    bool "Enable read-only EPD controller probe (Phase 1 reverse engineering)"
+    default n
+    help
+      When enabled, app_main runs a read-only SPI probe of the panel
+      controller and dumps LUT/register reads over UART instead of starting
+      the normal photo-frame stack. Bench reverse engineering only.
+      Leave OFF for normal firmware.
+
+endmenu

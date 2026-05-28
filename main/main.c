@@ -37,6 +37,9 @@
 #include "http_server.h"
 #include "pm1.h"
 #include "power_manager.h"
+#if CONFIG_EPD_PROBE
+#include "epd_probe.h"
+#endif
 
 static const char *TAG = "main";
 
@@ -85,6 +88,13 @@ void app_main(void)
         return;
     }
 
+#if CONFIG_EPD_PROBE
+    // Reverse-engineering probe: replaces the normal stack. Self-powers rails
+    // and inits the bus/panel internally, so it must run before SD mount.
+    epd_probe_run();
+    return;
+#endif
+
     // SD on the shared SPI bus. If no card is present, fall back to internal
     // LittleFS so the web UI can still save photos to flash.
     if (sd_storage_mount(true) != 0) {
@@ -97,9 +107,10 @@ void app_main(void)
     } else {
         photo_store_set_mount_point("/sdcard");
     }
-    if (strncmp(photo_store_dir(), "/littlefs", 9) == 0) {
-        pm1_set_sd_power(false);
-    }
+    // The SD and EPD rails share one SPI bus, so they must stay at the same
+    // power state (see pm1.c). Even in the LittleFS fallback we leave the SD
+    // rail powered: cutting it while the EPD rail comes up for a refresh would
+    // put the shared bus in a mixed state and corrupt the panel write.
     if (photo_store_init() != 0) {
         ESP_LOGE(TAG, "photo store init failed — abort");
         sd_storage_unmount();
