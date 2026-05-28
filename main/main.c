@@ -107,10 +107,9 @@ void app_main(void)
     } else {
         photo_store_set_mount_point("/sdcard");
     }
-    // The SD and EPD rails share one SPI bus, so they must stay at the same
-    // power state (see pm1.c). Even in the LittleFS fallback we leave the SD
-    // rail powered: cutting it while the EPD rail comes up for a refresh would
-    // put the shared bus in a mixed state and corrupt the panel write.
+    if (strncmp(photo_store_dir(), "/littlefs", 9) == 0) {
+        pm1_set_sd_power(false);
+    }
     if (photo_store_init() != 0) {
         ESP_LOGE(TAG, "photo store init failed — abort");
         sd_storage_unmount();
