@@ -18,12 +18,30 @@
 #include "esp_littlefs.h"
 #include "esp_timer.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+
 static const char *TAG = "photo_store";
 
 // ---------------------------------------------------------------------- state
 static char s_active[PHOTO_NAME_MAX] = {0};
 static char s_photo_dir[PHOTO_DIR_MAX] = PHOTO_DIR;
 static photo_store_error_t s_last_error = PHOTO_STORE_ERR_NONE;
+
+// Guards s_active only. It is written by the epd_worker task (on every refresh)
+// and by the httpd task (loop_display_request_show, photo_store_delete) and read
+// by the httpd task (/api/list). Without it a concurrent strncpy/strcmp can hand
+// /api/list a torn name. The critical sections are <=96-byte copies with no I/O.
+static SemaphoreHandle_t s_active_mtx = NULL;
+
+static void active_lock(void)
+{
+    if (s_active_mtx) xSemaphoreTake(s_active_mtx, portMAX_DELAY);
+}
+static void active_unlock(void)
+{
+    if (s_active_mtx) xSemaphoreGive(s_active_mtx);
+}
 
 static void set_error(photo_store_error_t err)
 {
@@ -60,9 +78,14 @@ int photo_store_set_mount_point(const char *mount_point)
 
 void photo_store_set_active(const char *name)
 {
-    if (!name) { s_active[0] = 0; return; }
-    strncpy(s_active, name, sizeof s_active - 1);
-    s_active[sizeof s_active - 1] = 0;
+    active_lock();
+    if (!name) {
+        s_active[0] = 0;
+    } else {
+        strncpy(s_active, name, sizeof s_active - 1);
+        s_active[sizeof s_active - 1] = 0;
+    }
+    active_unlock();
 }
 
 const char *photo_store_get_active(void)
@@ -70,9 +93,42 @@ const char *photo_store_get_active(void)
     return s_active;
 }
 
+void photo_store_copy_active(char *out, size_t out_sz)
+{
+    if (!out || out_sz == 0) return;
+    active_lock();
+    strncpy(out, s_active, out_sz - 1);
+    out[out_sz - 1] = 0;
+    active_unlock();
+}
+
+// Remove orphan "*.tmp" writer files left behind by an interrupted upload
+// (power loss / reset between fopen and rename). Without this they accumulate
+// and waste space, since nothing else ever reaps them. Best-effort.
+static void photo_store_sweep_tmp(void)
+{
+    DIR *d = opendir(s_photo_dir);
+    if (!d) return;
+    struct dirent *ent;
+    char path[PHOTO_PATH_MAX];
+    while ((ent = readdir(d)) != NULL) {
+        size_t nl = strlen(ent->d_name);
+        if (nl < 4 || strcasecmp(ent->d_name + nl - 4, ".tmp") != 0) continue;
+        int pn = snprintf(path, sizeof path, "%s/%s", s_photo_dir, ent->d_name);
+        if (pn < 0 || pn >= (int)sizeof path) continue;
+        if (unlink(path) == 0) {
+            ESP_LOGW(TAG, "swept orphan tmp %s", ent->d_name);
+        }
+    }
+    closedir(d);
+}
+
 // ---------------------------------------------------------------------- init
 int photo_store_init(void)
 {
+    if (!s_active_mtx) {
+        s_active_mtx = xSemaphoreCreateMutex();
+    }
     struct stat st;
     if (stat(s_photo_dir, &st) != 0) {
         if (mkdir(s_photo_dir, 0775) != 0) {
@@ -82,6 +138,7 @@ int photo_store_init(void)
         }
         ESP_LOGI(TAG, "created %s", s_photo_dir);
     }
+    photo_store_sweep_tmp();
     set_error(PHOTO_STORE_ERR_NONE);
     return 0;
 }
@@ -95,7 +152,12 @@ static bool name_is_safe(const char *name)
     if (n >= PHOTO_NAME_MAX) return false;
     for (size_t i = 0; i < n; i++) {
         unsigned char c = (unsigned char)name[i];
-        if (c == '/' || c == '\\') return false;
+        // Reject path separators and the two chars that would break the
+        // hand-built JSON in /api/list ('"' and '\\'). On-device names are
+        // ASCII 'p_<digits>.<ext>' so this never rejects a legitimate upload;
+        // it stops a sideloaded SD file with a quote in its name from emitting
+        // invalid JSON that bricks the gallery.
+        if (c == '/' || c == '\\' || c == '"') return false;
         if (c < 0x20 || c == 0x7f) return false;
     }
     return true;
@@ -165,7 +227,10 @@ bool photo_store_free_bytes(uint64_t *free_bytes)
     // Only the LittleFS-backed store reports cheaply.  SD goes through fatfs,
     // which would need a full FAT scan — skip the check there; the upload
     // handler is content to discover ENOSPC via the write itself.
-    if (strncmp(s_photo_dir, "/littlefs", 9) != 0) return false;
+    // Match the exact internal mount root ("/littlefs/photos"), not a prefix —
+    // a SD mount named e.g. "/littlefsX" must not be mistaken for the internal
+    // partition (whose label we pass to esp_littlefs_info below).
+    if (strncmp(s_photo_dir, "/littlefs/", 10) != 0) return false;
     size_t total = 0, used = 0;
     if (esp_littlefs_info("littlefs", &total, &used) != ESP_OK || total < used) {
         return false;
@@ -262,6 +327,9 @@ int photo_writer_close(photo_writer_t *w, bool keep)
             ESP_LOGE(TAG, "rename %s -> %s failed: %d",
                      w->tmp_path, w->final_path, errno);
             set_error(errno == ENOSPC ? PHOTO_STORE_ERR_NO_SPACE : PHOTO_STORE_ERR_IO);
+            // Don't leak the staged temp file when the rename fails — nothing
+            // else reaps it and it silently eats storage.
+            unlink(w->tmp_path);
             rc = -1;
         }
     } else {
@@ -302,7 +370,9 @@ int photo_store_delete(const char *name)
     if (photo_store_sidecar_path_for(name, ".json", json_path, sizeof json_path) == 0) {
         unlink(json_path);
     }
+    active_lock();
     if (strcmp(s_active, name) == 0) s_active[0] = 0;
+    active_unlock();
     return 0;
 }
 

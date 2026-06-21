@@ -7,10 +7,13 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <sys/time.h>
+
 #include "esp_err.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_mac.h"
+#include "esp_timer.h"
 #include "esp_wifi.h"
 #include "esp_netif_types.h"
 #include "freertos/FreeRTOS.h"
@@ -93,6 +96,10 @@ static void mdns_task(void *arg)
     }
     int yes = 1;
     setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes);
+    // Periodic recv timeout so the loop wakes to re-check the STA IP and re-join
+    // the multicast group after a reconnect that changes our address.
+    struct timeval rcvto = { .tv_sec = 2, .tv_usec = 0 };
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &rcvto, sizeof rcvto);
 
     struct sockaddr_in bind_addr = {0};
     bind_addr.sin_family = AF_INET;
@@ -106,19 +113,39 @@ static void mdns_task(void *arg)
         return;
     }
 
-    struct ip_mreq mreq = {0};
-    mreq.imr_multiaddr.s_addr = inet_addr("224.0.0.251");
-    mreq.imr_interface.s_addr = s_sta_ip;
-    setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof mreq);
-
     ESP_LOGI(TAG, "mDNS ready: http://papercolor.local/");
     uint8_t buf[512];
     uint8_t resp[128];
+    uint32_t joined_ip = 0;
     for (;;) {
+        // (Re)join 224.0.0.251 on the *current* STA interface whenever the
+        // address changes — initial join, or a DHCP/AP change after a
+        // reconnect. The task is created once, so without this the membership
+        // would stay bound to the first (possibly stale) interface IP and
+        // papercolor.local would silently stop resolving after any reconnect.
+        uint32_t cur_ip = s_sta_ip;
+        if (cur_ip != joined_ip) {
+            struct ip_mreq mreq = {0};
+            mreq.imr_multiaddr.s_addr = inet_addr("224.0.0.251");
+            if (joined_ip != 0) {
+                mreq.imr_interface.s_addr = joined_ip;
+                setsockopt(sock, IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof mreq);
+            }
+            if (cur_ip != 0) {
+                mreq.imr_interface.s_addr = cur_ip;
+                if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP,
+                               &mreq, sizeof mreq) == 0) {
+                    joined_ip = cur_ip;   // else retry on the next loop tick
+                }
+            } else {
+                joined_ip = 0;
+            }
+        }
+
         struct sockaddr_in src = {0};
         socklen_t slen = sizeof src;
         int n = recvfrom(sock, buf, sizeof buf, 0, (struct sockaddr *)&src, &slen);
-        if (n <= 0) continue;
+        if (n <= 0) continue;   // recv timeout (re-check IP) or error
         if (!s_sta_connected || s_sta_ip == 0) continue;
         int rn = build_mdns_response(buf, n, resp, sizeof resp, s_sta_ip);
         if (rn <= 0) continue;
@@ -141,13 +168,57 @@ static void start_mdns_once(void)
     }
 }
 
+// STA reconnect with exponential backoff. Calling esp_wifi_connect() straight
+// from the DISCONNECTED handler creates a tight reconnect storm when the SSID
+// is wrong / out of range (each failed attempt fires DISCONNECTED ~1 s later,
+// which immediately reconnects) — it pins the Wi-Fi task, floods the log and
+// drains the battery. We instead schedule the retry on a one-shot timer whose
+// delay doubles up to a cap, and reset the delay once we actually get an IP.
+#define STA_BACKOFF_MIN_MS   1000
+#define STA_BACKOFF_MAX_MS  30000
+static esp_timer_handle_t s_sta_reconnect_timer = NULL;
+static int                s_sta_backoff_ms = STA_BACKOFF_MIN_MS;
+
+static void sta_reconnect_timer_cb(void *arg)
+{
+    (void)arg;
+    if (!s_has_sta) return;
+    esp_err_t e = esp_wifi_connect();
+    if (e != ESP_OK) {
+        ESP_LOGW(TAG, "STA connect retry failed to start: %s", esp_err_to_name(e));
+    }
+}
+
+// First/immediate connect attempt (on STA_START).
 static void reconnect_sta(void)
 {
     if (!s_has_sta) return;
     esp_err_t e = esp_wifi_connect();
     if (e != ESP_OK) {
-        ESP_LOGW(TAG, "STA reconnect failed to start: %s", esp_err_to_name(e));
+        ESP_LOGW(TAG, "STA connect failed to start: %s", esp_err_to_name(e));
     }
+}
+
+// Backoff-scheduled retry (on STA_DISCONNECTED).
+static void schedule_sta_reconnect(void)
+{
+    if (!s_has_sta) return;
+    if (!s_sta_reconnect_timer) {
+        const esp_timer_create_args_t args = {
+            .callback = sta_reconnect_timer_cb,
+            .name = "sta_reconnect",
+        };
+        if (esp_timer_create(&args, &s_sta_reconnect_timer) != ESP_OK) {
+            reconnect_sta();   // fallback: connect now if the timer won't create
+            return;
+        }
+    }
+    (void)esp_timer_stop(s_sta_reconnect_timer);   // avoid double-arming
+    ESP_LOGW(TAG, "STA reconnect in %d ms", s_sta_backoff_ms);
+    (void)esp_timer_start_once(s_sta_reconnect_timer,
+                               (uint64_t)s_sta_backoff_ms * 1000ULL);
+    s_sta_backoff_ms *= 2;
+    if (s_sta_backoff_ms > STA_BACKOFF_MAX_MS) s_sta_backoff_ms = STA_BACKOFF_MAX_MS;
 }
 
 static void on_wifi_event(void *arg, esp_event_base_t base, int32_t id, void *data)
@@ -169,7 +240,7 @@ static void on_wifi_event(void *arg, esp_event_base_t base, int32_t id, void *da
         s_sta_connected = false;
         s_sta_ip = 0;
         ESP_LOGW(TAG, "STA disconnected, reason=%d; reconnecting", e ? e->reason : -1);
-        reconnect_sta();
+        schedule_sta_reconnect();
     }
 }
 
@@ -181,6 +252,7 @@ static void on_ip_event(void *arg, esp_event_base_t base, int32_t id, void *data
     ip_event_got_ip_t *event = (ip_event_got_ip_t *)data;
     s_sta_ip = event->ip_info.ip.addr;
     s_sta_connected = true;
+    s_sta_backoff_ms = STA_BACKOFF_MIN_MS;   // reset backoff after a good connect
     ESP_LOGI(TAG, "STA got IP: " IPSTR, IP2STR(&event->ip_info.ip));
     start_mdns_once();
 }

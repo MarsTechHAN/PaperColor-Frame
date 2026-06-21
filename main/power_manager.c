@@ -2,6 +2,7 @@
 
 #include "board_pins.h"
 #include "config_store.h"
+#include "epd_4in0e.h"
 #include "loop_display.h"
 #include "pm1.h"
 #include "status_led.h"
@@ -103,15 +104,48 @@ static void enter_deep_sleep(const char *reason)
     status_led_off();
 
     // Never cut power while the electrophoretic panel is actively refreshing.
-    loop_display_wait_idle();
+    // Bounded so a permanently wedged controller can't block sleep forever and
+    // drain the battery: a legitimate refresh finishes well within this cap
+    // (the per-step BUSY wait is itself capped at 30 s), and the rails get cut
+    // regardless once we proceed.
+    if (!loop_display_wait_idle_timeout(90000)) {
+        ESP_LOGW(TAG, "display still busy after 90s — sleeping anyway");
+    }
     status_led_off();
 
     if (s_wifi_enabled) {
         (void)esp_wifi_stop();
     }
+    // Park the EPD control lines low BEFORE the shared rail drops. After the
+    // last refresh DC/RST are left driven high; cutting the rail with them high
+    // pushes current into the now-unpowered controller through its protection
+    // diodes (the mixed-power hazard this board warns about) and wastes
+    // deep-sleep battery. Drive them low first; the digital domain then powers
+    // down at sleep so they float harmlessly.
+    epd_prepare_power_off();
     pm1_prepare_deep_sleep();
 
     configure_buttons();
+    // Wait (bounded) for any still-held button to be released before arming the
+    // ext1 ANY_LOW wake. Arming while a line is held low — e.g. the user is
+    // still pressing, or kept holding after the 15 s welcome force — would wake
+    // the chip again on the very next evaluation, a wake→sleep→wake thrash that
+    // cycles the rails. If a button is genuinely stuck, proceed after the cap.
+    {
+        const gpio_num_t btns[] = {
+            BOARD_BTN_TOP_GPIO, BOARD_BTN_UP_GPIO, BOARD_BTN_DOWN_GPIO,
+        };
+        int waited_ms = 0;
+        for (;;) {
+            bool any_low = false;
+            for (size_t i = 0; i < sizeof(btns) / sizeof(btns[0]); i++) {
+                if (gpio_get_level(btns[i]) == 0) { any_low = true; break; }
+            }
+            if (!any_low || waited_ms >= 5000) break;
+            vTaskDelay(pdMS_TO_TICKS(20));
+            waited_ms += 20;
+        }
+    }
     const gpio_num_t wake_gpios[] = {
         BOARD_BTN_TOP_GPIO,
         BOARD_BTN_UP_GPIO,

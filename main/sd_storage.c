@@ -25,12 +25,76 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
+
 static const char *TAG = "sd";
 static sdmmc_card_t *s_card = NULL;
 static bool s_littlefs_mounted = false;
 static const char *MOUNT_POINT = "/sdcard";
 static const char *INTERNAL_MOUNT_POINT = "/littlefs";
 static const char *INTERNAL_PARTITION   = "littlefs";
+
+// ---- Filesystem access guard (see header) -----------------------------------
+static SemaphoreHandle_t s_fs_mtx = NULL;     // protects the two fields below
+static bool s_fs_recovering = false;
+static int  s_fs_inflight   = 0;
+
+static void fs_guard_init(void)
+{
+    if (!s_fs_mtx) s_fs_mtx = xSemaphoreCreateMutex();
+}
+
+bool sd_storage_fs_acquire(void)
+{
+    fs_guard_init();
+    if (!s_fs_mtx) return true;   // fail-open if the mutex couldn't be created
+    xSemaphoreTake(s_fs_mtx, portMAX_DELAY);
+    bool ok = !s_fs_recovering;
+    if (ok) s_fs_inflight++;
+    xSemaphoreGive(s_fs_mtx);
+    return ok;
+}
+
+void sd_storage_fs_release(void)
+{
+    if (!s_fs_mtx) return;
+    xSemaphoreTake(s_fs_mtx, portMAX_DELAY);
+    if (s_fs_inflight > 0) s_fs_inflight--;
+    xSemaphoreGive(s_fs_mtx);
+}
+
+bool sd_storage_recover_begin(uint32_t drain_timeout_ms)
+{
+    fs_guard_init();
+    if (!s_fs_mtx) return true;
+    xSemaphoreTake(s_fs_mtx, portMAX_DELAY);
+    s_fs_recovering = true;   // gate: no new acquisitions succeed
+    xSemaphoreGive(s_fs_mtx);
+
+    uint32_t waited = 0;
+    for (;;) {
+        xSemaphoreTake(s_fs_mtx, portMAX_DELAY);
+        int n = s_fs_inflight;
+        xSemaphoreGive(s_fs_mtx);
+        if (n == 0) return true;             // quiescent — safe to unmount
+        if (waited >= drain_timeout_ms) {
+            ESP_LOGW(TAG, "fs drain timeout: %d handler(s) still in flight", n);
+            return false;                    // caller must NOT unmount
+        }
+        vTaskDelay(pdMS_TO_TICKS(20));
+        waited += 20;
+    }
+}
+
+void sd_storage_recover_end(void)
+{
+    if (!s_fs_mtx) return;
+    xSemaphoreTake(s_fs_mtx, portMAX_DELAY);
+    s_fs_recovering = false;
+    xSemaphoreGive(s_fs_mtx);
+}
 
 int sd_storage_mount(bool init_bus)
 {

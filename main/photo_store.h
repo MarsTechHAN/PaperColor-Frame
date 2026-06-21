@@ -86,6 +86,11 @@ int  photo_store_sidecar_path_for(const char *name, const char *ext,
 void photo_store_set_active(const char *name);
 const char *photo_store_get_active(void);
 
+// Thread-safe snapshot of the active-photo name into a caller buffer. Use this
+// (not the raw get_active pointer) from tasks other than the display worker —
+// the worker mutates the underlying buffer concurrently.
+void photo_store_copy_active(char *out, size_t out_sz);
+
 #ifdef __cplusplus
 }
 #endif

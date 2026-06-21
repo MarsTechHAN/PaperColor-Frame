@@ -78,6 +78,10 @@ static void dns_task(void *arg)
 
         // Build the response.
         int qsection_len = qname_end + 4 - 12;
+        // Bound the response: 12-byte header + copied question + 16-byte A RR
+        // must fit reply[]. A crafted long-QNAME query (up to n=512) would
+        // otherwise overflow this stack buffer. Drop anything that won't fit.
+        if (12 + qsection_len + 16 > (int)sizeof reply) continue;
         int reply_len = 0;
         // header
         reply[reply_len++] = id >> 8;       reply[reply_len++] = id & 0xff;
