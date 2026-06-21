@@ -60,6 +60,10 @@
 
 static const char *TAG = "dither";
 
+// Forward decl: the tone curve (map_source_to_panel_lab) needs the v2 gate,
+// which is defined lower with the other render-mode helpers.
+static inline bool dither_use_reflectance(void);
+
 // JS-visible progress counter — host code reads it via wasm_dither_progress.
 volatile int dither_progress_row = 0;
 
@@ -71,10 +75,16 @@ volatile int dither_progress_row = 0;
 #define S2 (2.0f / 42.0f)
 #define S1 (1.0f / 42.0f)
 
+// Per-component clamp on the carried error.  In the default (Lab) diffusion
+// space the natural scale is ±24 Lab units; the v2 reflectance path diffuses in
+// pseudo-reflectance p (∈~[0.1,0.5]) and sets a small bound instead.  Set once
+// at the top of dither_fs_core before any add_err call.
+static float s_err_clamp = 24.0f;
+
 static inline float clamp_err_component(float v)
 {
-    if (v < -24.0f) return -24.0f;
-    if (v >  24.0f) return  24.0f;
+    if (v < -s_err_clamp) return -s_err_clamp;
+    if (v >  s_err_clamp) return  s_err_clamp;
     return v;
 }
 
@@ -211,8 +221,14 @@ static inline void map_source_to_panel_lab(float *L, float *a, float *b)
     float t = *L / 100.0f;
     if (t < 0.0f) t = 0.0f;
     if (t > 1.0f) t = 1.0f;
-    // Slight toe lift keeps shadow detail from collapsing into black ink.
-    t = powf(t, 0.92f);
+    // Tone curve. Default: slight toe lift (0.92) keeps shadow detail from
+    // collapsing into black ink. v2: a stronger display-referred lift (0.80)
+    // brightens mid-tones into the upper panel range — the dim reflective
+    // surround makes a perceptual mid-grey read too dark, so we place mids
+    // higher. Endpoints are preserved (0→panel-black, 1→panel-white). This
+    // shapes L* only; chroma stays at 0.44× so the diffuser keeps its residual.
+    const bool v2_tone = dither_use_reflectance();
+    t = powf(t, v2_tone ? 0.80f : 0.92f);
 
     // Source chroma magnitude. Drives one targeted bend below; otherwise
     // the chroma compression is the same 0.44× the dither was tuned
@@ -231,7 +247,13 @@ static inline void map_source_to_panel_lab(float *L, float *a, float *b)
     // has full freedom.
     const float L_cusp = 40.0f;
     float L_target_t = t;
-    if (*L > Lw && src_C > 20.0f) {
+    // The cusp bend darkens bright saturated source colours so the picker still
+    // chooses a chromatic ink. v2 drops it: it was pulling sunlit yellows (whose
+    // cusp is at L≈63) down to L≈45, discarding the panel's only bright chromatic
+    // ink — the single largest "shallow dynamic range" loss. With honest
+    // reflectance diffusion the renderer trades brightness for chroma only where
+    // the gamut actually allows it.
+    if (!v2_tone && *L > Lw && src_C > 20.0f) {
         float overshoot = (*L - Lw) / (100.0f - Lw + 1e-3f);
         if (overshoot > 1.0f) overshoot = 1.0f;
         float satFactor = (src_C - 20.0f) / 40.0f;
@@ -248,12 +270,70 @@ static inline void map_source_to_panel_lab(float *L, float *a, float *b)
     // this way at scales >0.55).
     const float chroma_scale = 0.44f;
 
-    float neutral_a = ab + (aw - ab) * L_target_t;
-    float neutral_b = bb + (bw - bb) * L_target_t;
+    if (v2_tone) {
+        // v2 cusp gamut-map (replaces the flat 0.44 squash that dulled every
+        // colour). On E6 chroma costs lightness: each hue is only vivid near its
+        // cusp L* (yellow ~63 bright; red/blue/green ~36-41 dark). So:
+        //   1) pull target L* toward the hue's cusp in proportion to source
+        //      saturation — saturated reds/blues go a little darker so they can
+        //      actually BE saturated; yellow stays bright; pastels keep their L*.
+        //   2) map source chroma toward this hue's ceiling at the (pulled) L*
+        //      with a soft tanh knee that asymptotes just ABOVE the ceiling
+        //      (overshoot → the diffuser still gets out-of-gamut residual; we
+        //      never snap onto the hull). No hard clip ⇒ vivid, not bleached.
+        float C_src = sqrtf(src_a * src_a + src_b * src_b);
+        // Saturation gate: only GENUINELY saturated colours (pure red/blue/
+        // green/yellow, C≳40) get the vivid cusp treatment. Skin and other
+        // mid-chroma memory colours (C≈25-35) sit at satf≈0 and are left at
+        // their natural lightness with a gentle, faithful chroma — the cusp
+        // pull was wrecking faces (pulling skin dark + over-recruiting red).
+        float satf = (C_src - 40.0f) / (80.0f - 40.0f);
+        if (satf < 0.0f) satf = 0.0f;
+        if (satf > 1.0f) satf = 1.0f;
 
-    *L = Lb + (Lw - Lb) * L_target_t;
-    *a = neutral_a + (src_a * chroma_scale);
-    *b = neutral_b + (src_b * chroma_scale);
+        float L_t = L_target_t;
+        if (satf > 0.0f) {
+            // Vivid colours trade lightness for chroma → pull toward the hue's
+            // cusp L* (red/blue/green darker, yellow stays bright). Knob `pull`.
+            float cuspL   = panel_cusp_lightness(src_a, src_b);
+            float cuspL_t = (cuspL - Lb) / (Lw - Lb);
+            // Moderate: saturated colours gain vividness but keep more of their
+            // source lightness (0.75 read as too dark/too intense on panel).
+            const float pull = 0.50f;
+            L_t = L_target_t * (1.0f - satf * pull) + cuspL_t * (satf * pull);
+            if (L_t < 0.0f) L_t = 0.0f;
+            if (L_t > 1.0f) L_t = 1.0f;
+        }
+        float Lout = Lb + (Lw - Lb) * L_t;
+        float na = ab + (aw - ab) * L_t;
+        float nb = bb + (bw - bb) * L_t;
+        *L = Lout;
+        if (C_src > 1e-3f) {
+            float ceil = panel_chroma_ceiling(Lout, src_a, src_b);
+            const float C_ref = 52.0f;   // higher → gentler chroma push (was 45)
+            const float ovr   = 1.05f;   // smaller overshoot → less over-saturation
+            // Blend a gentle faithful scale (skin/mid-chroma, ≈ the previous
+            // version) with the vivid cusp push (saturated), by satf; never
+            // exceed the ceiling+overshoot so nothing bleaches.
+            float C_flat = C_src * 0.46f;
+            float C_cusp = ceil * ovr * tanhf((C_src / C_ref) / ovr);
+            float C_target = C_flat * (1.0f - satf) + C_cusp * satf;
+            float cap = ceil * ovr;
+            if (C_target > cap) C_target = cap;
+            float s = C_target / C_src;
+            *a = na + src_a * s;
+            *b = nb + src_b * s;
+        } else {
+            *a = na;
+            *b = nb;
+        }
+    } else {
+        float neutral_a = ab + (aw - ab) * L_target_t;
+        float neutral_b = bb + (bw - bb) * L_target_t;
+        *L = Lb + (Lw - Lb) * L_target_t;
+        *a = neutral_a + (src_a * chroma_scale);
+        *b = neutral_b + (src_b * chroma_scale);
+    }
 }
 
 // ------------------------------------------- 17³ gamut-map LUT (set from JS)
@@ -268,8 +348,10 @@ int   gamut_lut_loaded = 0;
 static inline void gamut_lab_from_rgb(uint8_t r, uint8_t g, uint8_t b,
                                       float *L, float *a_out, float *b_out)
 {
-    if (!gamut_lut_loaded) {
-        // Fallback: analytic path (still has the hue-preserving cusp bend).
+    if (!gamut_lut_loaded || dither_use_reflectance()) {
+        // Analytic path. v2 always uses it so the display-referred tone curve
+        // in map_source_to_panel_lab applies (the LUT, if any, bakes the legacy
+        // tone/cusp behaviour).
         rgb_to_lab_u8(r, g, b, L, a_out, b_out);
         map_source_to_panel_lab(L, a_out, b_out);
         return;
@@ -396,13 +478,77 @@ static inline float e6_palette_bias(uint8_t reg, float L,
         if (p == PIDX_YELLOW) bias += 0.10f;
     }
 
+    // v2 anti-speckle ("麻点"): in near-neutral source pixels a stray coloured
+    // dot (red/blue/green) is far more conspicuous than a luminance dot — it
+    // reads as colour confetti on greys/skin/walls/sky. CIEDE2000 already
+    // places these inks far from a neutral target; this adds an explicit cost,
+    // across ALL lightnesses (the existing highlight block only covers y>112),
+    // so accumulated chroma error can't dump a coloured dot into a neutral
+    // region. Ramped by source chroma so genuinely coloured areas are
+    // untouched. Yellow is intentionally exempt: at L≈63 it is near-isoluminant
+    // with paper white, so a yellow dot is a low-contrast filler, not speckle.
+    if (dither_use_reflectance()) {
+        const int neutral_c = 42;
+        if (chroma < neutral_c) {
+            float neu = (float)(neutral_c - chroma) / (float)neutral_c; // 1 neutral → 0 at c=42
+            if (p == PIDX_RED)   bias += 3.20f * neu;
+            if (p == PIDX_BLUE)  bias += 2.70f * neu;
+            if (p == PIDX_GREEN) bias += 2.70f * neu;
+        }
+    }
+
     return bias;
+}
+
+// The 28-patch halftone-mix model (measured beyond-6-colour calibration data)
+// is only consulted in MIXPATCH mode. In the default 6COLOR mode the dither
+// matches the six primary inks alone — the pre-29e9b69 behaviour.
+static inline bool dither_use_mix(void)
+{
+    return color_render_get_mode() == COLOR_RENDER_MIXPATCH
+        && palette_mix_enabled_count() > 0;
+}
+
+// v2 renderer: error diffusion in pseudo-reflectance + YN refine + display-
+// referred tone.  See color_pipeline.h COLOR_RENDER_REFLECTANCE.
+static inline bool dither_use_reflectance(void)
+{
+    return color_render_get_mode() == COLOR_RENDER_REFLECTANCE;
+}
+
+// NOTE (2026-06-17): a model-in-loop picker (score by YN-predicted neighbourhood
+// appearance, blended with the single-dot ΔE by α) was implemented and then
+// REJECTED by the eval harness (tools/wfsim/evalharness.mjs): the α-sweep showed
+// it did not reduce skin red speckle (flat ~35% at every α — skin red is driven
+// by the chroma TARGET, not the picker) and only added neutral colour confetti
+// as α rose. Reverted; the de-confetti vertex picker below scored best. Kept as
+// a record so the idea isn't re-tried without re-measuring.
+
+// Pseudo-reflectance helpers for the v2 path.  p = XYZ^(1/n); appearance is
+// p^n.  Diffusing residual in p makes a halftone converge to the YN optical
+// mean (not the linear-Lab mean), which is what the panel actually shows.
+static inline void lab_to_p(float L, float a, float b, float p[3])
+{
+    float X, Y, Z;
+    lab_to_xyz(L, a, b, &X, &Y, &Z);
+    const float inv_n = 1.0f / PALETTE_YN_N;
+    p[0] = powf(X > 0.0f ? X : 0.0f, inv_n);
+    p[1] = powf(Y > 0.0f ? Y : 0.0f, inv_n);
+    p[2] = powf(Z > 0.0f ? Z : 0.0f, inv_n);
+}
+
+static inline void p_to_lab(const float p[3], float *L, float *a, float *b)
+{
+    float X = powf(p[0] > 0.0f ? p[0] : 0.0f, PALETTE_YN_N);
+    float Y = powf(p[1] > 0.0f ? p[1] : 0.0f, PALETTE_YN_N);
+    float Z = powf(p[2] > 0.0f ? p[2] : 0.0f, PALETTE_YN_N);
+    xyz_to_lab(X, Y, Z, L, a, b);
 }
 
 static inline float e6_neighbour_mix_de(float L, float a, float b, int cand,
                                         int left, int up, int up_left, int up_right)
 {
-    if (palette_mix_enabled_count() <= 0) return -1.0f;
+    if (!dither_use_mix()) return -1.0f;
     float weights[PALETTE_N] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
     float total = 4.0f;
     weights[cand] += 4.0f;
@@ -621,7 +767,12 @@ static inline float optical_avg_error5(const float *target_lab, const uint8_t *i
     ta *= inv;
     tb *= inv;
 
-    if (palette_mix_enabled_count() > 0) {
+    if (dither_use_reflectance()) {
+        for (int i = 0; i < PALETTE_N; i++) ink_weights[i] *= inv;
+        float mix_lab[3];
+        palette_mix_model_yn(ink_weights, mix_lab);   // YN optical mean (correct)
+        oL = mix_lab[0]; oa = mix_lab[1]; ob = mix_lab[2];
+    } else if (dither_use_mix()) {
         for (int i = 0; i < PALETTE_N; i++) ink_weights[i] *= inv;
         float mix_lab[3];
         palette_mix_model_lab(ink_weights, mix_lab);
@@ -638,6 +789,10 @@ static inline float optical_avg_error5(const float *target_lab, const uint8_t *i
     float dL = tL - oL;
     float da = ta - oa;
     float db = tb - ob;
+    // v2 weights lightness and chroma equally so refine stops trading colour
+    // away to fix lightness; legacy keeps its historical 1.20 / 0.58 weighting.
+    if (dither_use_reflectance())
+        return dL*dL + (da*da + db*db);
     return dL*dL * 1.20f + (da*da + db*db) * 0.58f;
 }
 
@@ -945,6 +1100,10 @@ static int dither_fs_core(const uint8_t *in_rgb888, int w, int h,
     float t_hard, t_soft;
     smoothness_thresholds(smoothness, &t_hard, &t_soft);
 
+    // v2: diffuse in pseudo-reflectance (p∈~[0.1,0.5]); use a small error clamp.
+    const bool refl = dither_use_reflectance();
+    s_err_clamp = refl ? 0.6f : 24.0f;
+
     bool serp = false;
     dither_progress_row = 0;
 
@@ -967,16 +1126,28 @@ static int dither_fs_core(const uint8_t *in_rgb888, int w, int h,
             tl[0] = L; tl[1] = a; tl[2] = b;
 
             float *ec = err_cur + x * 3;
-            L += ec[0]; a += ec[1]; b += ec[2];
+
+            // Working colour the picker sees = target + carried error.  Legacy
+            // carries error in Lab; v2 carries it in pseudo-reflectance p and
+            // reconstructs the Lab the picker scores against.
+            float Lp, ap, bp;
+            float pt[3] = {0.0f, 0.0f, 0.0f};
+            if (refl) {
+                lab_to_p(L, a, b, pt);
+                pt[0] += ec[0]; pt[1] += ec[1]; pt[2] += ec[2];
+                p_to_lab(pt, &Lp, &ap, &bp);
+            } else {
+                Lp = L + ec[0]; ap = a + ec[1]; bp = b + ec[2];
+            }
 
             int left_idx = (x - xstep >= 0 && x - xstep < w) ? idx_cur[x - xstep] : -1;
             int up_idx = (y > 0) ? idx_prev[x] : -1;
             int up_left_idx = (y > 0 && x - xstep >= 0 && x - xstep < w) ? idx_prev[x - xstep] : -1;
             int up_right_idx = (y > 0 && x + xstep >= 0 && x + xstep < w) ? idx_prev[x + xstep] : -1;
             int best_idx = e6_mix_mode
-                ? pick_palette_e6_mix(L, a, b, reg, src[0], src[1], src[2],
+                ? pick_palette_e6_mix(Lp, ap, bp, reg, src[0], src[1], src[2],
                                       x, y, left_idx, up_idx, up_left_idx, up_right_idx)
-                : pick_palette_spatial(L, a, b, reg,
+                : pick_palette_spatial(Lp, ap, bp, reg,
                                        left_idx, up_idx, up_left_idx, up_right_idx);
 
             idx_cur[x] = (uint8_t)best_idx;
@@ -984,20 +1155,28 @@ static int dither_fs_core(const uint8_t *in_rgb888, int w, int h,
             if (out_idx_opt) out_idx_opt[y * w + x] = (uint8_t)best_idx;
             pack_nibble(out_packed, x, y, w, PALETTE_INK_CODE[best_idx]);
 
-            float dL = L - PALETTE_LAB[best_idx][0];
-            float da = a - PALETTE_LAB[best_idx][1];
-            float db = b - PALETTE_LAB[best_idx][2];
+            // Residual to diffuse: in p-space for v2, Lab otherwise.
+            float d0, d1, d2;
+            if (refl) {
+                d0 = pt[0] - PALETTE_REFL_P[best_idx][0];
+                d1 = pt[1] - PALETTE_REFL_P[best_idx][1];
+                d2 = pt[2] - PALETTE_REFL_P[best_idx][2];
+            } else {
+                d0 = Lp - PALETTE_LAB[best_idx][0];
+                d1 = ap - PALETTE_LAB[best_idx][1];
+                d2 = bp - PALETTE_LAB[best_idx][2];
+            }
 
             if (t_soft > 0.0f) {
-                float dE = ciede2000(L, a, b,
+                float dE = ciede2000(Lp, ap, bp,
                                      PALETTE_LAB[best_idx][0],
                                      PALETTE_LAB[best_idx][1],
                                      PALETTE_LAB[best_idx][2]);
                 float f = diffuse_factor(dE, t_hard, t_soft);
-                dL *= f; da *= f; db *= f;
+                d0 *= f; d1 *= f; d2 *= f;
             }
 
-            stucki_diffuse(err_cur, err_nxt, err_nxt2, x, w, h, y, dir, edge, dL, da, db);
+            stucki_diffuse(err_cur, err_nxt, err_nxt2, x, w, h, y, dir, edge, d0, d1, d2);
         }
 
         float *tmp = err_cur; err_cur = err_nxt; err_nxt = err_nxt2; err_nxt2 = tmp;
@@ -1094,6 +1273,10 @@ static inline uint8_t u8_sat(float v)
 static void catmull_rom_downsample(const uint8_t *src_rgb, int src_w, int src_h,
                                    uint8_t *dst_rgb, int panel_w, int panel_h)
 {
+    // v2 resamples in LINEAR light (gamma-correct): averaging gamma-encoded
+    // sRGB biases mid-tones and edge contrast. Legacy keeps byte averaging to
+    // stay bit-identical / match the old preview.
+    const bool lin = dither_use_reflectance();
     for (int y = 0; y < panel_h; y++) {
         float sy = 1.5f * y + 0.75f;
         int   syf = (int)sy;
@@ -1127,9 +1310,15 @@ static void catmull_rom_downsample(const uint8_t *src_rgb, int src_w, int src_h,
                              : (kx == 2) ? wx2 : wx3;
                     float w = wx * wy;
                     const uint8_t *p = src_rgb + (iy * src_w + ix) * 3;
-                    R += w * p[0];
-                    G += w * p[1];
-                    B += w * p[2];
+                    if (lin) {
+                        R += w * color_srgb_to_linear(p[0]);
+                        G += w * color_srgb_to_linear(p[1]);
+                        B += w * color_srgb_to_linear(p[2]);
+                    } else {
+                        R += w * p[0];
+                        G += w * p[1];
+                        B += w * p[2];
+                    }
                     ws += w;
                 }
             }
@@ -1137,9 +1326,15 @@ static void catmull_rom_downsample(const uint8_t *src_rgb, int src_w, int src_h,
             // for numerical hygiene at edge-clamped positions.
             float inv = (ws != 0.0f) ? (1.0f / ws) : 0.0f;
             uint8_t *d = dst_rgb + (y * panel_w + x) * 3;
-            d[0] = u8_sat(R * inv);
-            d[1] = u8_sat(G * inv);
-            d[2] = u8_sat(B * inv);
+            if (lin) {
+                d[0] = color_linear_to_srgb(R * inv);
+                d[1] = color_linear_to_srgb(G * inv);
+                d[2] = color_linear_to_srgb(B * inv);
+            } else {
+                d[0] = u8_sat(R * inv);
+                d[1] = u8_sat(G * inv);
+                d[2] = u8_sat(B * inv);
+            }
         }
     }
 }
@@ -1227,7 +1422,11 @@ static int dither_15x_core(const uint8_t *src_rgb, int src_w, int src_h,
     }
 
     catmull_rom_downsample(src_rgb, src_w, src_h, target, panel_w, panel_h);
-    unsharp_mask_inplace(target, panel_w, panel_h, 0.48f);
+    // v2 sharpens very lightly: enhance_eink already did a gentle clarity pass,
+    // and on the narrow panel window every bit of sharpening overshoot becomes
+    // an extra halftone dot (speckle). Keep just enough for edge definition.
+    unsharp_mask_inplace(target, panel_w, panel_h,
+                         dither_use_reflectance() ? 0.10f : 0.48f);
 
     int rc = e6_mix_mode
            ? dither_e6_mix_fs(target, panel_w, panel_h, out_packed, out_idx_opt, smoothness)

@@ -23,6 +23,12 @@ int loop_display_request_next(void);
 // so the user can read the AP credentials when they've forgotten them.
 int loop_display_request_welcome(void);
 
+// Async: power-on first screen. Paints the welcome card, dwells ~15 s so the
+// user can read the on-screen Wi-Fi credentials, then advances to the first
+// stored photo if the library is non-empty (leaves the welcome up otherwise).
+// Queued by main() on a fresh power-on / top-button wake.
+int loop_display_request_boot_splash(void);
+
 // Async: paint the entire panel with a single ink (ink_code is the panel's
 // 4-bit code: 0=black 1=white 2=yellow 3=red 5=blue 6=green).  Used by the
 // calibration wizard so the user has a full-screen reference to match
@@ -40,6 +46,12 @@ int loop_display_request_mix(const uint8_t *ink_codes,
 // holding the last image and no command is in flight).  Useful before a
 // shutdown.
 void loop_display_wait_idle(void);
+
+// Bounded variant: wait up to timeout_ms for the worker to go idle. Returns
+// true if it became idle, false on timeout. Used by the deep-sleep path so a
+// permanently wedged controller can't block sleep (and drain the battery)
+// forever — the rails are cut on sleep regardless.
+bool loop_display_wait_idle_timeout(uint32_t timeout_ms);
 
 // Non-blocking idle snapshot.
 bool loop_display_is_idle(void);

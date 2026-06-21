@@ -45,6 +45,22 @@ void adjust_cfg_default(adjust_cfg_t *o)
     o->smoothness  = 30;
 }
 
+// ----------------------------------------------------- colour-rendering mode
+static color_render_mode_t s_color_render_mode = COLOR_RENDER_6COLOR;
+
+void color_render_set_mode(color_render_mode_t mode)
+{
+    if (mode < COLOR_RENDER_6COLOR || mode > COLOR_RENDER_REFLECTANCE) {
+        mode = COLOR_RENDER_6COLOR;
+    }
+    s_color_render_mode = mode;
+}
+
+color_render_mode_t color_render_get_mode(void)
+{
+    return s_color_render_mode;
+}
+
 // --------------------------------------------------------------- apply_adjust
 //
 // One pass over the buffer.  Python order:
@@ -198,6 +214,57 @@ void rgb_to_lab_f(float r, float g, float b, float *L, float *a, float *b_out)
                   L, a, b_out);
 }
 
+// ---------------------------------------------------------- CIELAB ↔ XYZ (D65)
+//
+// Used by the v2 (reflectance) renderer.  These are the diffuse XYZ tristimulus
+// values — optical dot-mixing of reflective ink is (approximately) linear in
+// XYZ, unlike CIELAB which is a cube-root/opponent space.  The forward f() and
+// D65 white point match linrgb_to_lab above, so lab_to_xyz∘xyz_to_lab is an
+// identity within float precision.
+
+static inline float lab_finv(float t)
+{
+    // Inverse of lab_f().
+    float t3 = t * t * t;
+    if (t3 > 0.008856f) return t3;
+    return (t - 16.0f / 116.0f) / 7.787f;
+}
+
+void lab_to_xyz(float L, float a, float b, float *X, float *Y, float *Z)
+{
+    float fy = (L + 16.0f) / 116.0f;
+    float fx = a / 500.0f + fy;
+    float fz = fy - b / 200.0f;
+    *X = D65_Xn * lab_finv(fx);
+    *Y = D65_Yn * lab_finv(fy);
+    *Z = D65_Zn * lab_finv(fz);
+}
+
+void xyz_to_lab(float X, float Y, float Z, float *L, float *a, float *b_out)
+{
+    float fx = lab_f(X / D65_Xn);
+    float fy = lab_f(Y / D65_Yn);
+    float fz = lab_f(Z / D65_Zn);
+    *L     = 116.0f * fy - 16.0f;
+    *a     = 500.0f * (fx - fy);
+    *b_out = 200.0f * (fy - fz);
+}
+
+float color_srgb_to_linear(uint8_t c)
+{
+    return s_srgb_to_linear[c];
+}
+
+uint8_t color_linear_to_srgb(float lin)
+{
+    if (lin <= 0.0f) return 0;
+    if (lin >= 1.0f) return 255;
+    float v = (lin <= 0.0031308f) ? (12.92f * lin)
+                                  : (1.055f * powf(lin, 1.0f / 2.4f) - 0.055f);
+    int i = (int)(v * 255.0f + 0.5f);
+    return i < 0 ? 0 : (i > 255 ? 255 : (uint8_t)i);
+}
+
 // ------------------------------------------------------------------ CIEDE2000
 //
 // Faithful port of the Python custom_delta_e_2000().  Hot path of dithering —
@@ -337,6 +404,13 @@ int enhance_eink_rgb888(uint8_t *rgb, int w, int h)
         }
     }
 
+    // v2 (REFLECTANCE) softens this stage: tone shaping moves to the
+    // display-referred curve in map_source_to_panel_lab, and chroma is left to
+    // the gamut map, so here we only do a gentle edge-clarity pass with no
+    // S-curve and no chroma boost — avoiding the contrast/chroma EXPANSION that
+    // the narrow panel window then clips into halos and out-of-gamut speckle.
+    const int v2 = (color_render_get_mode() == COLOR_RENDER_REFLECTANCE);
+
     for (size_t i = 0; i < n; i++) {
         uint8_t *p = rgb + i * 3;
         int yv = lum[i];
@@ -346,18 +420,23 @@ int enhance_eink_rgb888(uint8_t *rgb, int w, int h)
 
         // Stronger detail boost in textured/edge pixels, gentler in flats.
         float edge = absd > 28 ? 1.0f : (float)absd / 28.0f;
-        float clarity = 0.26f + 0.30f * edge;
+        float clarity = v2 ? (0.12f + 0.15f * edge) : (0.26f + 0.30f * edge);
         int y2 = yv + (int)(detail * clarity + (detail >= 0 ? 0.5f : -0.5f));
 
         // Reflective paper loses deep shadows and bright highlights; a mild
         // S-curve increases mid-tone separation without clipping endpoints hard.
-        float t = (float)y2 / 255.0f;
-        float s = t + 0.10f * (t - 0.5f) * (1.0f - fabsf(2.0f * t - 1.0f));
-        y2 = clamp_i32((int)(s * 255.0f + 0.5f), 0, 255);
+        // v2 skips it (the display-referred tone curve handles luminance).
+        if (!v2) {
+            float t = (float)y2 / 255.0f;
+            float s = t + 0.10f * (t - 0.5f) * (1.0f - fabsf(2.0f * t - 1.0f));
+            y2 = clamp_i32((int)(s * 255.0f + 0.5f), 0, 255);
+        }
 
         // Chroma separation: keep hue, expand distance from luma a little so
         // the six-ink dither has clearer colour decisions in transition zones.
-        float sat = 1.06f + 0.08f * edge;
+        // v2 keeps chroma at 1.0 (no boost) — the tiny panel gamut turns an
+        // unconditional boost into colored speckle.
+        float sat = v2 ? 1.0f : (1.06f + 0.08f * edge);
         int r = y2 + (int)((p[0] - yv) * sat + ((p[0] >= yv) ? 0.5f : -0.5f));
         int g = y2 + (int)((p[1] - yv) * sat + ((p[1] >= yv) ? 0.5f : -0.5f));
         int b = y2 + (int)((p[2] - yv) * sat + ((p[2] >= yv) ? 0.5f : -0.5f));

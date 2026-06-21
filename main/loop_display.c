@@ -25,6 +25,7 @@
 #include "esp_timer.h"
 
 #include "photo_store.h"
+#include "sd_storage.h"
 #include "config_store.h"
 #include "image_loader.h"
 #include "resize.h"
@@ -56,7 +57,13 @@ typedef enum {
     CMD_FILL_INK = 3,
     CMD_MIX_PATCH = 4,
     CMD_WELCOME  = 5,
+    CMD_BOOT_SPLASH = 6,
 } cmd_kind_t;
+
+// Power-on first-screen splash: paint the welcome card, dwell this long, then
+// advance to the first stored photo (if any). Long enough to read the on-screen
+// Wi-Fi credentials before the panel switches to a photo.
+#define BOOT_SPLASH_HOLD_MS 15000
 
 typedef struct {
     cmd_kind_t kind;
@@ -83,20 +90,23 @@ static const adjust_cfg_t k_default_adjust = {
 
 static int panel_power_on(void)
 {
-    epd_prepare_power_off();
-    if (pm1_set_epd_power(true) != 0) {
-        ESP_LOGE(TAG, "EPD rail enable failed");
-        return -1;
-    }
-    vTaskDelay(pdMS_TO_TICKS(120));
-    // The shared SPI bus is initialised by sd_storage_mount(true) before any
-    // display refresh.  Passing true avoids a harmless-but-noisy
-    // "SPI bus already initialized" error log on the first Show Now.
-    ESP_LOGI(TAG, "EPD rail on; running panel init");
-    if (epd_init(true) != 0) {
-        ESP_LOGE(TAG, "EPD init failed after rail enable");
-        epd_prepare_power_off();
-        pm1_set_epd_power(false);
+    // The EPD and SD rails share one SPI bus and are kept powered together for
+    // the whole awake session (see project_spi_power_coupling). Assert both
+    // rails on — idempotent, a no-op write when already up — then re-init the
+    // panel controller, which the previous refresh left in POWER_OFF (0x02)
+    // idle (NOT deep sleep — that wedged the soft-reset wake).
+    //
+    // epd_init(false): let the EPD driver *ensure* the bus is up rather than
+    // assume sd_storage_mount(true) already did it. spi_bus_initialize() is
+    // idempotent (returns ESP_ERR_INVALID_STATE when already inited, which
+    // epd_init tolerates), so this is a no-op on the normal SD path but
+    // correctly brings the bus up in the LittleFS-fallback case where the SD
+    // mount — and thus its bus init — never succeeded. A failed init returns
+    // -1 so display_fb can power-cycle.
+    (void)pm1_set_epd_power(true);
+    (void)pm1_set_sd_power(true);
+    if (epd_init(false) != 0) {
+        ESP_LOGE(TAG, "EPD init failed");
         return -1;
     }
     return 0;
@@ -104,11 +114,100 @@ static int panel_power_on(void)
 
 static void panel_power_off(void)
 {
-    epd_sleep();
-    vTaskDelay(pdMS_TO_TICKS(10));
-    epd_prepare_power_off();
+    // Do NOT issue the controller deep-sleep (0x07/0xA5) here. The rail stays
+    // powered for the whole awake session (it is shared with SD), and a
+    // controller parked in deep sleep does NOT reliably wake from the next
+    // refresh's *soft* reset — BUSY then stays low and the panel wedges
+    // (observed: refresh #1 OK, refresh #2 "BUSY stuck low 30000 ms"). After
+    // epd_turn_on()'s POWER_OFF (0x02) the controller is already in a low-power
+    // idle state that the next epd_init() reset reliably revives. True low-power
+    // shutdown happens on ESP deep sleep, which cuts both rails entirely
+    // (pm1_prepare_deep_sleep) for a clean cold boot on wake — epd_sleep() is
+    // issued there if needed, not per refresh.
+}
+
+// ---------------------------------------------------------- panel recovery
+//
+// Fallback when the EPD controller wedges (BUSY never releases). A soft reset
+// has already proven insufficient in that state, so we hard power-cycle the
+// shared EPD+SD rail and cold-init. The store is unmounted first and remounted
+// after (mirroring the boot order) so a card-backed filesystem survives the
+// rail drop; the internal LittleFS store lives in flash and is unaffected by
+// the rail but is cycled too for uniformity. Rare path — logged loudly.
+static int panel_remount_store(void)
+{
+    // Bus stays initialised across the rail cycle (we only gate power, never
+    // spi_bus_free), so remount/re-init pass "bus already inited".
+    //
+    // Re-mount the SAME backend the session booted with — do NOT silently
+    // re-home the store. Switching an SD-backed session to LittleFS here would
+    // (a) hide the user's SD library for the rest of the session, (b) let
+    // sd_storage_mount_internal() format the flash partition, and (c) skip the
+    // mkdir of "<mount>/photos" — so uploads/list would land in a nonexistent
+    // dir. We detect the boot backend from the current mount point.
+    bool was_sd = strncmp(photo_store_dir(), "/sdcard", 7) == 0;
+    if (was_sd) {
+        // The rail just dropped; a slow card may need a couple of tries to
+        // come back. Retry rather than fall through to flash.
+        for (int attempt = 0; attempt < 3; attempt++) {
+            if (sd_storage_mount(false) == 0) {
+                photo_store_set_mount_point("/sdcard");
+                photo_store_init();        // ensure /sdcard/photos exists
+                return 0;
+            }
+            vTaskDelay(pdMS_TO_TICKS(150));
+        }
+        ESP_LOGE(TAG, "recovery: SD remount failed after retries; "
+                      "keeping /sdcard (store degraded until reboot)");
+        return -1;   // stay SD; do not orphan the library onto flash
+    }
+    // LittleFS-backed session: remount flash.
+    if (sd_storage_mount_internal() == 0 &&
+        photo_store_set_mount_point("/littlefs") == 0) {
+        photo_store_init();                // ensure /littlefs/photos exists
+        return 0;
+    }
+    return -1;
+}
+
+static int panel_hard_recover(void)
+{
+    ESP_LOGW(TAG, "EPD wedged — hard power-cycle recovery");
+
+    // Close the gate on new httpd file I/O and wait for any in-flight read /
+    // write to finish before we unmount and cut the shared rail. The httpd task
+    // can be mid-fopen/fread/fwrite on this very filesystem; unmounting under it
+    // would free the VFS/littlefs state it is using (use-after-free). If the
+    // in-flight ops don't drain in time, ABORT recovery — drop this frame and
+    // let the next command retry — rather than tear the FS down unsafely.
+    if (!sd_storage_recover_begin(8000)) {
+        ESP_LOGE(TAG, "recovery: FS busy, deferring power-cycle to next attempt");
+        sd_storage_recover_end();
+        return -1;
+    }
+
+    epd_prepare_power_off();          // park DC/RST low before the rail drops
+    sd_storage_unmount();             // release the FS before cutting SD power
+
+    // Rails must move together (shared bus); drop both, then restore both.
     (void)pm1_set_epd_power(false);
-    ESP_LOGI(TAG, "EPD rail off");
+    (void)pm1_set_sd_power(false);
+    vTaskDelay(pdMS_TO_TICKS(250));   // let the panel DC-DC fully discharge
+    (void)pm1_set_epd_power(true);
+    (void)pm1_set_sd_power(true);
+    vTaskDelay(pdMS_TO_TICKS(300));   // SD power-good + rail settle
+
+    if (panel_remount_store() != 0) {
+        ESP_LOGE(TAG, "recovery: store remount failed (FS may be degraded)");
+    }
+    sd_storage_recover_end();         // re-open the gate for httpd FS ops
+
+    if (epd_init(false) != 0) {       // cold init from a truly powered-off state
+        ESP_LOGE(TAG, "recovery: EPD re-init still failing");
+        return -1;
+    }
+    ESP_LOGW(TAG, "EPD recovery: re-init OK");
+    return 0;
 }
 
 static uint8_t read_battery_percent(void)
@@ -128,8 +227,22 @@ static int display_fb(uint8_t *fb, bool draw_battery)
         battery_overlay_draw(fb, read_battery_percent());
     }
     int64_t t0 = esp_timer_get_time();
-    if (panel_power_on() != 0) return -1;
-    epd_display(fb);
+
+    // Normal path: power on (re-inits the controller) then push + refresh.
+    int rc = panel_power_on();
+    if (rc == 0) rc = epd_display(fb);
+
+    // Fallback (兜底): a wedged controller (BUSY never released, at init or
+    // mid-refresh) — hard power-cycle the rail and retry once. If it still
+    // fails, drop this frame but keep the worker alive so HTTP keeps serving
+    // and the next image can try again, instead of stalling 30 s per command.
+    if (rc != 0) {
+        if (panel_hard_recover() != 0 || epd_display(fb) != 0) {
+            ESP_LOGE(TAG, "epd refresh failed after recovery — skipping frame");
+            return -1;
+        }
+    }
+
     panel_power_off();
     ESP_LOGI(TAG, "epd_disp %lldms", (esp_timer_get_time() - t0) / 1000);
     return 0;
@@ -439,6 +552,36 @@ static void worker(void *arg)
             continue;
         }
 
+        if (cmd.kind == CMD_BOOT_SPLASH) {
+            // Power-on first screen: paint the welcome card (shows the per-device
+            // Wi-Fi credentials), dwell ~15 s, then advance to the first stored
+            // photo. Don't flip s_welcome_lang — this is a splash, not a toggle.
+            ESP_LOGI(TAG, "boot splash (welcome lang=%d)", s_welcome_lang);
+            (void)run_welcome(s_welcome_lang);
+            photo_store_set_active(NULL);
+
+            photo_meta_t one;
+            bool have_photos = photo_store_list(&one, 1) > 0;
+            if (!have_photos) {
+                // Empty library: leave the welcome card up, same as before.
+                continue;
+            }
+            // Hold the first screen, but bail early if a web/side-button command
+            // shows up so the user's choice wins instead of waiting out the dwell
+            // and then doing a redundant auto-advance.
+            bool preempted = false;
+            for (int waited = 0; waited < BOOT_SPLASH_HOLD_MS; waited += 200) {
+                if (uxQueueMessagesWaiting(s_q) > 0) { preempted = true; break; }
+                vTaskDelay(pdMS_TO_TICKS(200));
+            }
+            // No command queued during the dwell: advance to the first photo via
+            // the normal NEXT path (active was just cleared, so it shows list[0]).
+            if (!preempted && uxQueueMessagesWaiting(s_q) == 0) {
+                (void)loop_display_request_next();
+            }
+            continue;
+        }
+
         char name[PHOTO_NAME_MAX];
         if (cmd.kind == CMD_SHOW_OPT && cmd.name[0]) {
             strncpy(name, cmd.name, sizeof name - 1);
@@ -524,6 +667,13 @@ int loop_display_request_welcome(void)
     return xQueueSend(s_q, &c, 0) == pdTRUE ? 0 : -1;
 }
 
+int loop_display_request_boot_splash(void)
+{
+    if (!s_q) return -1;
+    display_cmd_t c = { .kind = CMD_BOOT_SPLASH };
+    return xQueueSend(s_q, &c, 0) == pdTRUE ? 0 : -1;
+}
+
 int loop_display_request_fill(uint8_t ink_code)
 {
     if (!s_q) return -1;
@@ -547,6 +697,17 @@ void loop_display_wait_idle(void)
     while (!loop_display_is_idle()) {
         vTaskDelay(pdMS_TO_TICKS(50));
     }
+}
+
+bool loop_display_wait_idle_timeout(uint32_t timeout_ms)
+{
+    uint32_t waited = 0;
+    while (!loop_display_is_idle()) {
+        if (waited >= timeout_ms) return false;
+        vTaskDelay(pdMS_TO_TICKS(50));
+        waited += 50;
+    }
+    return true;
 }
 
 bool loop_display_is_idle(void)

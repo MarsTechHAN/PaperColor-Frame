@@ -66,14 +66,32 @@ static void epd_send_data1(uint8_t v)
     epd_send_data(&v, 1);
 }
 
-static void epd_wait_busy_high(void)
+// Returns 0 once BUSY released, -1 if it stayed low past the timeout.
+static int epd_wait_busy_high(void)
 {
     // The panel datasheet pulls BUSY low while it is internally working.
     // We loop with a yield so the IDLE task doesn't starve the watchdog.
+    //
+    // Hard timeout: a full E6 refresh holds BUSY low ~16 s, so 30 s is well
+    // past any legitimate operation. Without this cap, a marginal wake-from-
+    // sleep or a missed BUSY edge spins this loop forever and wedges the EPD
+    // worker task permanently — the panel never updates again until a power
+    // cycle (observed as a refresh that logs "displaying"/"bin read" but never
+    // "epd_disp"). On timeout we now return -1 so the caller can bail out of
+    // the rest of the command sequence and trigger a power-cycle recovery,
+    // instead of plowing on into more 30 s stalls on a dead controller.
+    const int timeout_ms = 30000;
+    int waited_ms = 0;
     while (gpio_get_level(EPD_PIN_BUSY) == 0) {
         vTaskDelay(pdMS_TO_TICKS(10));
+        waited_ms += 10;
+        if (waited_ms >= timeout_ms) {
+            ESP_LOGE(TAG, "BUSY stuck low for %d ms — aborting wait", waited_ms);
+            return -1;
+        }
     }
     vTaskDelay(pdMS_TO_TICKS(200));
+    return 0;
 }
 
 static void epd_reset(void)
@@ -88,10 +106,12 @@ static void epd_reset(void)
 
 // ------------------------------------------------------------------ refresh
 
-static void epd_turn_on(void)
+// Returns 0 on a completed refresh, -1 if BUSY hung at any step (POWER_ON,
+// DISPLAY_REFRESH, or POWER_OFF) — a wedged controller the caller must recover.
+static int epd_turn_on(void)
 {
     epd_send_cmd(0x04);     // POWER_ON
-    epd_wait_busy_high();
+    if (epd_wait_busy_high() != 0) return -1;
     vTaskDelay(pdMS_TO_TICKS(200));
 
     // Second setting (per panel reference code).
@@ -104,12 +124,13 @@ static void epd_turn_on(void)
 
     epd_send_cmd(0x12);     // DISPLAY_REFRESH
     epd_send_data1(0x00);
-    epd_wait_busy_high();
+    if (epd_wait_busy_high() != 0) return -1;
 
     epd_send_cmd(0x02);     // POWER_OFF
     epd_send_data1(0x00);
-    epd_wait_busy_high();
+    if (epd_wait_busy_high() != 0) return -1;
     vTaskDelay(pdMS_TO_TICKS(200));
+    return 0;
 }
 
 // ------------------------------------------------------------------ public
@@ -158,7 +179,14 @@ int epd_init(bool bus_already_inited)
     }
 
     epd_reset();
-    epd_wait_busy_high();
+    if (epd_wait_busy_high() != 0) {
+        // Controller didn't come up after reset (classic wedged-after-deep-
+        // sleep symptom). Report it so panel_power_on / display_fb can trigger
+        // a hard power-cycle recovery instead of sending init bytes into a dead
+        // controller and stalling another 30 s on the final wait.
+        ESP_LOGE(TAG, "epd_init: BUSY low after reset — controller not responding");
+        return -1;
+    }
     vTaskDelay(pdMS_TO_TICKS(30));
 
     // Initialisation sequence — taken verbatim from EPD_4in0e.cpp.
@@ -176,7 +204,10 @@ int epd_init(bool bus_already_inited)
     epd_send_cmd(0xE3); epd_send_data1(0x2F);
     epd_send_cmd(0x84); epd_send_data1(0x01);
 
-    epd_wait_busy_high();
+    if (epd_wait_busy_high() != 0) {
+        ESP_LOGE(TAG, "epd_init: BUSY low after init sequence");
+        return -1;
+    }
     return 0;
 }
 
@@ -196,10 +227,10 @@ void epd_clear(uint8_t ink_code)
             remaining -= n;
         }
     }
-    epd_turn_on();
+    (void)epd_turn_on();
 }
 
-void epd_display(const uint8_t *fb)
+int epd_display(const uint8_t *fb)
 {
     const size_t total = (size_t)(EPD_4IN0E_WIDTH / 2) * EPD_4IN0E_HEIGHT;
     epd_send_cmd(0x10);
@@ -212,7 +243,7 @@ void epd_display(const uint8_t *fb)
         epd_send_data(fb + sent, n);
         sent += n;
     }
-    epd_turn_on();
+    return epd_turn_on();
 }
 
 void epd_sleep(void)

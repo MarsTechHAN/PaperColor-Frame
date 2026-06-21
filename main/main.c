@@ -37,9 +37,6 @@
 #include "http_server.h"
 #include "pm1.h"
 #include "power_manager.h"
-#if CONFIG_EPD_PROBE
-#include "epd_probe.h"
-#endif
 
 static const char *TAG = "main";
 
@@ -70,8 +67,10 @@ void app_main(void)
 
     esp_sleep_wakeup_cause_t wake = esp_sleep_get_wakeup_cause();
     uint64_t ext1_mask = esp_sleep_get_ext1_wakeup_status();
-    bool wake_by_top = (wake == ESP_SLEEP_WAKEUP_EXT0) ||
-                       (wake == ESP_SLEEP_WAKEUP_EXT1 &&
+    // Only EXT1 (the button-GPIO mask) is ever armed for wake (see
+    // power_manager.c); EXT0 is never enabled, so decode which button woke us
+    // purely from the ext1 status mask.
+    bool wake_by_top = (wake == ESP_SLEEP_WAKEUP_EXT1 &&
                         wake_mask_has(ext1_mask, BOARD_BTN_TOP_GPIO));
     bool wake_by_side = (wake == ESP_SLEEP_WAKEUP_EXT1 &&
                          (wake_mask_has(ext1_mask, BOARD_BTN_UP_GPIO) ||
@@ -87,13 +86,6 @@ void app_main(void)
         ESP_LOGE(TAG, "M5PM1 init failed — abort");
         return;
     }
-
-#if CONFIG_EPD_PROBE
-    // Reverse-engineering probe: replaces the normal stack. Self-powers rails
-    // and inits the bus/panel internally, so it must run before SD mount.
-    epd_probe_run();
-    return;
-#endif
 
     // SD on the shared SPI bus. If no card is present, fall back to internal
     // LittleFS so the web UI can still save photos to flash.
@@ -142,14 +134,12 @@ void app_main(void)
         ESP_LOGI(TAG, "side-button wake: queueing refresh");
         queued_refresh = (loop_display_request_next() == 0);
     } else if (wifi_enabled) {
-        // Fresh power-on / reset: if the library is empty, push the welcome
-        // card immediately so the user sees the per-device Wi-Fi credentials
-        // without having to press anything.
-        photo_meta_t one = {0};
-        if (photo_store_list(&one, 1) == 0) {
-            ESP_LOGI(TAG, "empty library: queueing welcome refresh");
-            queued_refresh = (loop_display_request_next() == 0);
-        }
+        // Fresh power-on / reset / top-button wake: always show the first screen.
+        // The boot splash paints the welcome card (per-device Wi-Fi credentials),
+        // holds ~15 s, then advances to the first stored photo if the library is
+        // non-empty (and just leaves the welcome up when it's empty).
+        ESP_LOGI(TAG, "power-on: queueing boot splash (welcome + photo)");
+        queued_refresh = (loop_display_request_boot_splash() == 0);
     }
 
     power_manager_config_t pm_cfg = {

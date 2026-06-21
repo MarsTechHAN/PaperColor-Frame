@@ -27,6 +27,7 @@
 #include "photo_store.h"
 #include "config_store.h"
 #include "loop_display.h"
+#include "sd_storage.h"
 
 // Wall-clock helpers for handler timing.  We log a one-line summary per
 // request when it crosses HTTP_SLOW_LOG_MS so the serial trail surfaces the
@@ -69,9 +70,21 @@ static esp_err_t send_photo_store_error(httpd_req_t *req, const char *fallback)
     return send_text(req, "500 Internal Server Error", "text/plain", fallback);
 }
 
-// Pull the last path segment as a NUL-terminated name (URL-decoded enough
-// for our 'p_<digits>.jpg' filenames).  No percent-decoding here — the UI
-// only generates ASCII names.
+static int hex_nibble(int c)
+{
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+// Pull the last path segment as a NUL-terminated name, percent-decoding %XX
+// escapes. Every JS caller wraps the name in encodeURIComponent(), so a name
+// containing a space / '%' / non-ASCII byte arrives percent-encoded; without
+// decoding here the on-disk name, its .bin/.json siblings and the /api/list
+// entry would all diverge from what /api/display later asks for, and the photo
+// would silently never show. Decoding restores the encodeURIComponent contract.
+// Subsequent name_is_safe() validation rejects anything dangerous in the result.
 static int url_tail_name(const char *uri, const char *prefix,
                          char *out, size_t out_sz)
 {
@@ -81,9 +94,23 @@ static int url_tail_name(const char *uri, const char *prefix,
     // strip any query string
     const char *q = strchr(p, '?');
     size_t n = q ? (size_t)(q - p) : strlen(p);
-    if (n == 0 || n >= out_sz) return -1;
-    memcpy(out, p, n);
-    out[n] = 0;
+    if (n == 0) return -1;
+
+    size_t o = 0;
+    for (size_t i = 0; i < n; i++) {
+        char c = p[i];
+        if (c == '%') {
+            if (i + 2 >= n) return -1;            // truncated escape
+            int hi = hex_nibble((unsigned char)p[i + 1]);
+            int lo = hex_nibble((unsigned char)p[i + 2]);
+            if (hi < 0 || lo < 0) return -1;       // malformed escape
+            c = (char)((hi << 4) | lo);
+            i += 2;
+        }
+        if (o + 1 >= out_sz) return -1;            // would overflow out buffer
+        out[o++] = c;
+    }
+    out[o] = 0;
     return 0;
 }
 
@@ -211,31 +238,49 @@ static esp_err_t h_i18n(httpd_req_t *req)
 static esp_err_t h_list(httpd_req_t *req)
 {
     int64_t t0 = now_us();
+    if (!sd_storage_fs_acquire()) {
+        return send_text(req, "503 Service Unavailable", "text/plain", "storage busy");
+    }
     photo_meta_t list[64];
     int n = photo_store_list(list, 64);
+    sd_storage_fs_release();
+    char act[PHOTO_NAME_MAX];
+    photo_store_copy_active(act, sizeof act);
     int64_t t_scan = now_us();
     if (n < 0) return send_json(req, "{\"photos\":[],\"active\":null}");
 
-    // Build JSON manually — keeps deps lean.
-    size_t cap = 256 + n * 96;
+    // Build JSON manually — keeps deps lean.  Budget for the worst case so a
+    // long filename can never make snprintf truncate: a truncated write still
+    // advances `off` by the *intended* length, which would underflow
+    // `cap - off` on the next call and overflow the heap buffer.  Names are
+    // JSON-escaped (a '"' or '\\' doubles in length), so reserve 2x the name
+    // budget per entry plus the JSON skeleton and two uint32s.
+    size_t cap = 128 + 2 * PHOTO_NAME_MAX + (size_t)n * (2 * PHOTO_NAME_MAX + 64);
     char *buf = malloc(cap);
     if (!buf) return ESP_FAIL;
     size_t off = 0;
-    const char *act = photo_store_get_active();
-    off += snprintf(buf + off, cap - off,
-                    "{\"active\":%s%s%s,\"photos\":[",
-                    (act && *act) ? "\"" : "",
-                    (act && *act) ? act  : "null",
-                    (act && *act) ? "\"" : "");
-    for (int i = 0; i < n; i++) {
-        off += snprintf(buf + off, cap - off,
-                        "%s{\"name\":\"%s\",\"size\":%u,\"mtime\":%u}",
-                        i ? "," : "",
-                        list[i].name,
-                        (unsigned)list[i].size,
-                        (unsigned)list[i].mtime);
+    char act_esc[PHOTO_NAME_MAX * 2];
+    if (act[0]) json_escape_string(act_esc, sizeof act_esc, act);
+    int w = snprintf(buf + off, cap - off,
+                     "{\"active\":%s%s%s,\"photos\":[",
+                     act[0] ? "\"" : "",
+                     act[0] ? act_esc : "null",
+                     act[0] ? "\"" : "");
+    if (w > 0) off += (size_t)w;
+    for (int i = 0; i < n && off < cap; i++) {
+        char name_esc[PHOTO_NAME_MAX * 2];
+        json_escape_string(name_esc, sizeof name_esc, list[i].name);
+        w = snprintf(buf + off, cap - off,
+                     "%s{\"name\":\"%s\",\"size\":%u,\"mtime\":%u}",
+                     i ? "," : "",
+                     name_esc,
+                     (unsigned)list[i].size,
+                     (unsigned)list[i].mtime);
+        if (w < 0) break;
+        off += (size_t)w;
     }
-    off += snprintf(buf + off, cap - off, "]}");
+    if (off >= cap) off = cap - 1;   // defensive: never index past the buffer
+    snprintf(buf + off, cap - off, "]}");
     esp_err_t rc = send_json(req, buf);
     free(buf);
     int total_ms = us_to_ms(now_us() - t0);
@@ -260,8 +305,15 @@ static esp_err_t h_photo_get(httpd_req_t *req)
         httpd_resp_set_status(req, "404 Not Found");
         return httpd_resp_send(req, "no", HTTPD_RESP_USE_STRLEN);
     }
+    // Hold the FS guard for the whole open→read→close window so a concurrent
+    // panel recovery on the worker cannot unmount the filesystem out from under
+    // our open FILE* (see sd_storage_fs_acquire).
+    if (!sd_storage_fs_acquire()) {
+        return send_text(req, "503 Service Unavailable", "text/plain", "storage busy");
+    }
     FILE *fp = fopen(path, "rb");
     if (!fp) {
+        sd_storage_fs_release();
         httpd_resp_set_status(req, "404 Not Found");
         return httpd_resp_send(req, "no", HTTPD_RESP_USE_STRLEN);
     }
@@ -280,11 +332,13 @@ static esp_err_t h_photo_get(httpd_req_t *req)
     while ((r = fread(chunk, 1, sizeof chunk, fp)) > 0) {
         if (httpd_resp_send_chunk(req, chunk, r) != ESP_OK) {
             fclose(fp);
+            sd_storage_fs_release();
             return ESP_FAIL;
         }
         total += r;
     }
     fclose(fp);
+    sd_storage_fs_release();
     httpd_resp_send_chunk(req, NULL, 0);
     int total_ms = us_to_ms(now_us() - t0);
     if (total_ms >= HTTP_SLOW_LOG_MS) {
@@ -308,16 +362,32 @@ static esp_err_t h_upload(httpd_req_t *req)
     if (url_tail_name(req->uri, "/api/upload/", name, sizeof name) != 0) {
         return send_text(req, "400 Bad Request", "text/plain", "bad name");
     }
+    // Reject a bodyless upload. A chunked / Content-Length-0 request would run
+    // the recv loop zero times and then rename an empty .tmp over an existing
+    // same-named photo — silently truncating it to 0 bytes while still
+    // answering {"ok":true}. The browser always sets Content-Length, so this
+    // only guards non-browser/proxy clients.
+    if (req->content_len <= 0) {
+        return send_text(req, "411 Length Required", "text/plain", "empty upload");
+    }
+    // Hold the FS guard for the whole open→feed→close lifetime so a concurrent
+    // panel recovery cannot unmount under the open writer (see h_photo_get).
+    if (!sd_storage_fs_acquire()) {
+        return send_text(req, "503 Service Unavailable", "text/plain", "storage busy");
+    }
     uint64_t free_bytes = 0;
     if (photo_store_free_bytes(&free_bytes) &&
-        req->content_len > 0 &&
         (uint64_t)req->content_len > free_bytes) {
         ESP_LOGW(TAG, "upload rejected: %s needs %d bytes, only %llu free in %s",
                  name, req->content_len, (unsigned long long)free_bytes, photo_store_dir());
+        sd_storage_fs_release();
         return send_text(req, "507 Insufficient Storage", "text/plain", "not enough storage");
     }
     photo_writer_t *w = photo_writer_open(name);
-    if (!w) return send_photo_store_error(req, "open failed");
+    if (!w) {
+        sd_storage_fs_release();
+        return send_photo_store_error(req, "open failed");
+    }
     int64_t t_open = now_us();
 
     // Allocate the recv buffer on the heap so the httpd task stack stays slim.
@@ -326,6 +396,7 @@ static esp_err_t h_upload(httpd_req_t *req)
     char *buf = malloc(CHUNK);
     if (!buf) {
         photo_writer_close(w, false);
+        sd_storage_fs_release();
         return send_text(req, "500 Internal Server Error", "text/plain", "out of memory");
     }
     int64_t recv_us = 0, write_us = 0;
@@ -339,12 +410,14 @@ static esp_err_t h_upload(httpd_req_t *req)
             if (got == HTTPD_SOCK_ERR_TIMEOUT) continue;
             photo_writer_close(w, false);
             free(buf);
+            sd_storage_fs_release();
             return ESP_FAIL;
         }
         ts = now_us();
         if (photo_writer_feed(w, (uint8_t *)buf, got) != 0) {
             photo_writer_close(w, false);
             free(buf);
+            sd_storage_fs_release();
             return send_photo_store_error(req, "write failed");
         }
         write_us += now_us() - ts;
@@ -353,8 +426,10 @@ static esp_err_t h_upload(httpd_req_t *req)
     free(buf);
     int64_t t_loop_end = now_us();
     if (photo_writer_close(w, true) != 0) {
+        sd_storage_fs_release();
         return send_photo_store_error(req, "rename failed");
     }
+    sd_storage_fs_release();
     int64_t t_done = now_us();
     int total_ms = us_to_ms(t_done - t0);
     // Always log uploads — they're rare and the timing is gold for tuning.
@@ -375,7 +450,12 @@ static esp_err_t h_photo_del(httpd_req_t *req)
     if (url_tail_name(req->uri, "/api/photo/", name, sizeof name) != 0) {
         return send_text(req, "400 Bad Request", "text/plain", "bad name");
     }
-    if (photo_store_delete(name) != 0) {
+    if (!sd_storage_fs_acquire()) {
+        return send_text(req, "503 Service Unavailable", "text/plain", "storage busy");
+    }
+    int del_rc = photo_store_delete(name);
+    sd_storage_fs_release();
+    if (del_rc != 0) {
         return send_text(req, "500 Internal Server Error", "text/plain", "delete failed");
     }
     esp_err_t rc = send_json(req, "{\"ok\":true}");
@@ -397,8 +477,13 @@ static esp_err_t h_display(httpd_req_t *req)
     if (photo_store_path_for(name, path, sizeof path) != 0) {
         return send_text(req, "400 Bad Request", "text/plain", "bad name");
     }
+    if (!sd_storage_fs_acquire()) {
+        return send_text(req, "503 Service Unavailable", "text/plain", "storage busy");
+    }
     struct stat st;
-    if (stat(path, &st) != 0) {
+    int strc = stat(path, &st);
+    sd_storage_fs_release();
+    if (strc != 0) {
         return send_text(req, "404 Not Found", "text/plain", "no such photo");
     }
     if (loop_display_request_show(name) != 0) {
@@ -577,10 +662,15 @@ static esp_err_t h_config(httpd_req_t *req)
     if (req->method == HTTP_GET) {
         return send_config_json_with_version(req);
     }
-    // POST: read full body (small JSON patch), parse known fields.
+    // POST: read the full body (a small JSON patch), parse known fields.
+    // Reject anything larger than our parse buffer rather than silently
+    // truncating — a truncated body parses as partial garbage and leaves
+    // unread bytes on the socket, desyncing a keep-alive connection.
     char buf[512];
-    int n = (req->content_len < (int)sizeof buf - 1)
-              ? req->content_len : (int)sizeof buf - 1;
+    if ((size_t)req->content_len >= sizeof buf) {
+        return send_text(req, "400 Bad Request", "text/plain", "bad config body");
+    }
+    int n = (int)req->content_len;
     int got = 0;
     while (got < n) {
         int r = httpd_req_recv(req, buf + got, n - got);
@@ -600,10 +690,17 @@ static esp_err_t h_config(httpd_req_t *req)
         {"wifi_idle_sleep_s", config_set_wifi_idle_sleep_s},
     };
     for (size_t i = 0; i < sizeof(fields) / sizeof(fields[0]); i++) {
-        const char *p = strstr(buf, fields[i].key);
+        // Match the *quoted* key token and require a ':' right after, like the
+        // string-field parser. A bare strstr would false-match the key as a
+        // substring of a longer key or inside a string value.
+        char needle[48];
+        int nn = snprintf(needle, sizeof needle, "\"%s\"", fields[i].key);
+        if (nn < 0 || nn >= (int)sizeof needle) continue;
+        const char *p = strstr(buf, needle);
         if (!p) continue;
-        p = strchr(p, ':');
-        if (!p) continue;
+        p += nn;
+        while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+        if (*p != ':') continue;
         uint32_t v = (uint32_t)strtoul(p + 1, NULL, 10);
         fields[i].set(v);
     }

@@ -69,6 +69,11 @@
       'adjust.colorimetry.sceSubtle': 'SCE subtle (k=0.02)',
       'adjust.colorimetry.sceDefault': 'SCE default (k=0.04)',
       'adjust.colorimetry.sceStrong': 'SCE strong (k=0.06)',
+      'adjust.colorRenderMode': 'Color rendering',
+      'adjust.colorRenderHint': '6-color matches only the six primary inks — cleaner and lighter (the behaviour before the beyond-6-color mix calibration was added). Mix patches also uses the 28-patch halftone calibration for richer, more saturated colour. Reflectance v2 is a from-scratch redesign: it diffuses error in optical-reflectance (Yule–Nielsen) space and uses a brighter display-referred tone curve, for truer color and more apparent dynamic range.',
+      'adjust.colorRender.sixColor': '6-color (default)',
+      'adjust.colorRender.mixPatch': 'Mix patches (richer color)',
+      'adjust.colorRender.reflectance': 'Reflectance v2 (experimental)',
 
       'detail.photo': 'Photo',
 
@@ -289,6 +294,11 @@
       'adjust.colorimetry.sceSubtle': 'SCE 轻度 (k=0.02)',
       'adjust.colorimetry.sceDefault': 'SCE 默认 (k=0.04)',
       'adjust.colorimetry.sceStrong': 'SCE 强 (k=0.06)',
+      'adjust.colorRenderMode': '色彩模式',
+      'adjust.colorRenderHint': '6 色：只匹配 6 种原色油墨，更干净、更亮（即引入「6 色以外的混色校准数据」之前的效果）。混色 patch：额外使用 28 个混色校准 patch，颜色更浓郁、更饱和。反射域 v2：从头重构的算法，在光学反射（Yule–Nielsen）空间做误差扩散，并采用更亮的显示参考色调曲线，颜色更准、动态范围更大。',
+      'adjust.colorRender.sixColor': '6 色（默认）',
+      'adjust.colorRender.mixPatch': '混色 patch（更浓郁）',
+      'adjust.colorRender.reflectance': '反射域 v2（实验）',
 
       'detail.photo': '照片',
 

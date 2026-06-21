@@ -44,6 +44,29 @@ extern const uint8_t PALETTE_RGB_MEASURED[PALETTE_N][3];
 // not what the colorimeter integrated under d/8 SCI.
 extern float PALETTE_LAB[PALETTE_N][3];
 
+// Per-ink pseudo-reflectance p = XYZ^(1/n) for the v2 (reflectance) renderer.
+// Built by palette_init() from PALETTE_LAB.  Optical dot-mixing is linear in p
+// under the Yule–Nielsen model: p_mix = Σ wᵢ·pᵢ, appearance XYZ = p_mix^n.
+// Diffusing error in p-space makes a halftone converge to the correct *optical*
+// mean rather than the physically-wrong linear-Lab mean.
+#define PALETTE_YN_N 1.4f   // re-fit from the 28 measured mix patches (≈1.4–1.45)
+extern float PALETTE_REFL_P[PALETTE_N][3];
+
+// Yule–Nielsen reflectance mix → predicted Lab of a dot population.
+// weights need not be normalised (they are normalised internally).
+void palette_mix_model_yn(const float weights[PALETTE_N], float out_lab[3]);
+
+// Panel chroma ceiling (cusp model) — max C* the panel can hold at target
+// lightness L* for the hue of (a,b). Built from the measured 6 inks + mix
+// patches. Drives the v2 chroma gamut-map so saturation rises to the cusp but
+// never past it (no bleaching). See panel_build_cusp in palette.c.
+float panel_chroma_ceiling(float L, float a, float b);
+
+// Lightness of the chroma cusp for the hue of (a,b) — where this hue is most
+// saturated (yellow ~L63, red ~L36, blue/green ~L41). The v2 map pulls
+// saturated colours toward it so they render vivid instead of dull.
+float panel_cusp_lightness(float a, float b);
+
 void palette_init(void);
 
 // Colorimetry pipeline mode.  LEGACY reproduces the pre-2026-05 behavior

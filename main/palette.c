@@ -55,6 +55,133 @@ static const float PALETTE_LAB_SCI[PALETTE_N][3] = {
 
 float PALETTE_LAB[PALETTE_N][3];
 
+// Per-ink pseudo-reflectance p = XYZ^(1/n), built from PALETTE_LAB in
+// palette_init().  See palette.h / the v2 renderer notes in dither.c.
+float PALETTE_REFL_P[PALETTE_N][3];
+
+static void palette_build_reflectance(void)
+{
+    const float inv_n = 1.0f / PALETTE_YN_N;
+    for (int i = 0; i < PALETTE_N; i++) {
+        float X, Y, Z;
+        lab_to_xyz(PALETTE_LAB[i][0], PALETTE_LAB[i][1], PALETTE_LAB[i][2],
+                   &X, &Y, &Z);
+        PALETTE_REFL_P[i][0] = powf(X > 0.0f ? X : 0.0f, inv_n);
+        PALETTE_REFL_P[i][1] = powf(Y > 0.0f ? Y : 0.0f, inv_n);
+        PALETTE_REFL_P[i][2] = powf(Z > 0.0f ? Z : 0.0f, inv_n);
+    }
+}
+
+// ----------------------------------------------------- panel chroma envelope
+//
+// The reproducible gamut is a cusp solid: each hue has a maximum-chroma point
+// (its "cusp") at a specific L*, and achievable chroma falls off toward both
+// panel white and panel black. We model it per-hue from the measured anchors
+// (6 inks + the enabled mix patches): s_cuspC[h]/s_cuspL[h] is the cusp chroma
+// and its lightness for hue-bin h. panel_chroma_ceiling(L,a,b) then returns how
+// much chroma the panel can actually hold at a given target L* for that hue —
+// the curve that decides where "more saturation" becomes "bleached/over-
+// saturated". Used by the v2 chroma gamut-map (dither.c).
+// Measured chromatic anchors (hue, L*, C*) — the 6 inks (minus W/K) + enabled
+// mix patches. The cusp for a query hue is the highest-chroma anchor within a
+// hue window, taken DIRECTLY (no binning/gap averaging — that inflated the
+// cusp lightness for hues sitting between two anchors, e.g. pure red at 33°
+// between the red ink at 22° and the yellow-red patch at 85°).
+#define PANEL_ANCH_MAX 40
+static float s_anchH[PANEL_ANCH_MAX], s_anchL[PANEL_ANCH_MAX], s_anchC[PANEL_ANCH_MAX];
+static int   s_anchN = 0;
+
+static void panel_add_anchor(float L, float a, float b)
+{
+    float C = sqrtf(a * a + b * b);
+    if (C < 3.0f || s_anchN >= PANEL_ANCH_MAX) return;   // near-neutral: no hue
+    float h = atan2f(b, a) * 57.2957795f;
+    if (h < 0.0f) h += 360.0f;
+    s_anchH[s_anchN] = h; s_anchL[s_anchN] = L; s_anchC[s_anchN] = C; s_anchN++;
+}
+
+static void panel_build_cusp(void)
+{
+    s_anchN = 0;
+    for (int i = 0; i < PALETTE_N; i++) {
+        if (i == PIDX_WHITE || i == PIDX_BLACK) continue;
+        panel_add_anchor(PALETTE_LAB[i][0], PALETTE_LAB[i][1], PALETTE_LAB[i][2]);
+    }
+    for (int p = 0; p < PALETTE_MIX_PATCH_N; p++) {
+        if (PALETTE_MIX_PATCHES[p].enabled)
+            panel_add_anchor(PALETTE_MIX_PATCHES[p].lab[0],
+                             PALETTE_MIX_PATCHES[p].lab[1],
+                             PALETTE_MIX_PATCHES[p].lab[2]);
+    }
+}
+
+// Cusp (max reachable chroma + its lightness) near a hue: widen the window
+// until at least one anchor is found, then take the highest-chroma anchor.
+static void panel_cusp_query(float hue, float *cC, float *cL)
+{
+    float bestC = 0.0f, bestL = 48.0f;
+    for (float win = 35.0f; win <= 185.0f && bestC <= 0.0f; win += 40.0f) {
+        for (int i = 0; i < s_anchN; i++) {
+            float d = hue - s_anchH[i];
+            if (d < 0.0f) d = -d;
+            if (d > 180.0f) d = 360.0f - d;
+            if (d <= win && s_anchC[i] > bestC) { bestC = s_anchC[i]; bestL = s_anchL[i]; }
+        }
+    }
+    *cC = bestC; *cL = bestL;
+}
+
+float panel_cusp_lightness(float a, float b)
+{
+    float hue = atan2f(b, a) * 57.2957795f;
+    if (hue < 0.0f) hue += 360.0f;
+    float cC, cL; panel_cusp_query(hue, &cC, &cL);
+    return cL;
+}
+
+float panel_chroma_ceiling(float L, float a, float b)
+{
+    float hue = atan2f(b, a) * 57.2957795f;
+    if (hue < 0.0f) hue += 360.0f;
+    float cuspC, cuspL; panel_cusp_query(hue, &cuspC, &cuspL);
+    float Lw = PALETTE_LAB[PIDX_WHITE][0];
+    float Lb = PALETTE_LAB[PIDX_BLACK][0];
+    float roll;
+    if (L >= cuspL) roll = (Lw > cuspL) ? (Lw - L) / (Lw - cuspL) : 0.0f;
+    else            roll = (cuspL > Lb) ? (L - Lb) / (cuspL - Lb) : 0.0f;
+    if (roll < 0.0f) roll = 0.0f;
+    if (roll > 1.0f) roll = 1.0f;
+    return cuspC * roll;
+}
+
+// Yule–Nielsen reflectance mix: appearance of a dot population whose (un-
+// normalised) area weights are `weights`.  p_mix = Σ fᵢ·pᵢ is LINEAR in the
+// pseudo-reflectance pᵢ; the visible XYZ is p_mix^n; result returned as Lab.
+void palette_mix_model_yn(const float weights[PALETTE_N], float out_lab[3])
+{
+    float total = 0.0f;
+    for (int i = 0; i < PALETTE_N; i++) total += weights[i];
+    if (total <= 1e-6f) {
+        out_lab[0] = PALETTE_LAB[PIDX_WHITE][0];
+        out_lab[1] = PALETTE_LAB[PIDX_WHITE][1];
+        out_lab[2] = PALETTE_LAB[PIDX_WHITE][2];
+        return;
+    }
+    const float inv = 1.0f / total;
+    float acc[3] = {0.0f, 0.0f, 0.0f};
+    for (int i = 0; i < PALETTE_N; i++) {
+        float f = weights[i] * inv;
+        if (f <= 0.0f) continue;
+        acc[0] += f * PALETTE_REFL_P[i][0];
+        acc[1] += f * PALETTE_REFL_P[i][1];
+        acc[2] += f * PALETTE_REFL_P[i][2];
+    }
+    float X = powf(acc[0] > 0.0f ? acc[0] : 0.0f, PALETTE_YN_N);
+    float Y = powf(acc[1] > 0.0f ? acc[1] : 0.0f, PALETTE_YN_N);
+    float Z = powf(acc[2] > 0.0f ? acc[2] : 0.0f, PALETTE_YN_N);
+    xyz_to_lab(X, Y, Z, &out_lab[0], &out_lab[1], &out_lab[2]);
+}
+
 // --------------------------------------------------------- SCI → SCE correction
 //
 // AG glass + d/8 SCI: the colorimeter integrates ~4% first-surface Fresnel
@@ -395,6 +522,11 @@ void palette_mix_model_lab(const float weights[PALETTE_N], float out[3])
 
 void palette_mix_rebuild_model(void)
 {
+    // PALETTE_LAB may have just changed (calibration push, SCE mode, init);
+    // keep the v2 reflectance table + chroma envelope derived from it in sync.
+    palette_build_reflectance();
+    panel_build_cusp();
+
     memset(s_pair_model, 0, sizeof(s_pair_model));
     memset(s_anchor_model, 0, sizeof(s_anchor_model));
     s_anchor_count = 0;
@@ -514,5 +646,5 @@ void palette_init(void)
             lab_apply_sce(PALETTE_LAB_SCI[i], PALETTE_LAB[i], s_specular_floor_k);
         }
     }
-    palette_mix_reset_defaults();
+    palette_mix_reset_defaults();   // rebuilds the mix model + reflectance table
 }

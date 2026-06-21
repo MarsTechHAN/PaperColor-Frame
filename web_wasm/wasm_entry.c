@@ -103,6 +103,23 @@ EXPORT int wasm_get_palette_mode(void)
     return (int)palette_get_mode();
 }
 
+// Select the colour-rendering mode (color_render_mode_t):
+// 0 = 6-colour (default — match only the six primary inks, the pre-29e9b69
+//     behaviour before beyond-6-colour mix calibration was added),
+// 1 = mix-patch (experimental — also match the 28 measured halftone-mix
+//     patches for richer/more-saturated colour, the current behaviour).
+// Gates only the dither's use of the mix model; source Lab and the gamut map
+// are untouched.
+EXPORT void wasm_set_color_render_mode(int mode)
+{
+    color_render_set_mode((color_render_mode_t)mode);
+}
+
+EXPORT int wasm_get_color_render_mode(void)
+{
+    return (int)color_render_get_mode();
+}
+
 // 17³ sRGB→Lab gamut-map LUT. Built JS-side from the 34 calibration patches
 // (hue-binned panel-gamut envelope) and pushed once after calibration loads.
 // At runtime the dither replaces "rgb_to_lab_u8 + map_source_to_panel_lab"

@@ -1938,6 +1938,15 @@ input[type=file] { display: none; }
             </select>
           </label>
           <p class="adjust-experimental__caption" data-i18n="adjust.colorimetryHint">SCE subtracts the AG glass first-surface reflection.</p>
+          <label class="adjust-experimental__row">
+            <span data-i18n="adjust.colorRenderMode">Color rendering</span>
+            <select id="color-render-mode-select">
+              <option value="6color"      data-i18n="adjust.colorRender.sixColor">6-color (default)</option>
+              <option value="mixpatch"    data-i18n="adjust.colorRender.mixPatch">Mix patches (richer color)</option>
+              <option value="reflectance" data-i18n="adjust.colorRender.reflectance">Reflectance v2 (experimental)</option>
+            </select>
+          </label>
+          <p class="adjust-experimental__caption" data-i18n="adjust.colorRenderHint">6-color matches only the six primary inks (cleaner, lighter). Mix patches also uses the 28-patch calibration for richer, more saturated colour. Reflectance v2 diffuses error in optical-reflectance space with a brighter tone curve — a from-scratch redesign for truer color and more dynamic range.</p>
         </details>
       </div>
     </section>
@@ -2442,9 +2451,13 @@ function _showBusyEntry(entry) {
   }
 }
 function _disarmBusyEntry(entry) {
+  // Cancel the arm timer FIRST, before the stack check.  When the wrapped op
+  // finishes faster than the arm delay the entry was never pushed, so indexOf
+  // returns -1 — but the timer is still pending and would otherwise fire later
+  // and show a spinner that nothing is left to dismiss (stuck "正在删除").
+  if (entry.timer) { clearTimeout(entry.timer); entry.timer = null; }
   const idx = _busyStack.indexOf(entry);
   if (idx === -1) return;
-  if (entry.timer) { clearTimeout(entry.timer); entry.timer = null; }
   _busyStack.splice(idx, 1);
   _renderBusy();
 }
@@ -2498,18 +2511,40 @@ window.addEventListener('paper-i18n-change', () => {
 const TW = 400, TH = 600;
 const SW = 600, SH = 900;
 const PALETTE_ORDER = ['black','white','yellow','red','blue','green'];
+
+// fetch with a hard timeout.  Every device handler returns immediately (panel
+// refreshes are queued async on the worker), so a request that never resolves
+// always means the link or device is gone — most often the phone silently
+// dropped the internet-less SoftAP, or the device deep-slept after its idle
+// timeout.  Without this, an awaited fetch hangs forever and the busy spinner
+// (withBusy) spins with the button disabled until the browser's own very-long
+// TCP timeout.  On abort we throw AbortError, which the callers' try/catch +
+// withBusy finally already turn into a toast + a re-enabled button.
+const FETCH_TIMEOUT_MS = 12000;
+const UPLOAD_TIMEOUT_MS = 30000;
+async function fetchT(url, opts, timeoutMs) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs || FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...(opts || {}), signal: ctrl.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 const api = {
-  async list()    { const r = await fetch('/api/list'); return r.json(); },
-  async cfg()     { const r = await fetch('/api/config'); return r.json(); },
-  async setCfg(j) { return fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(j)}); },
-  async calib()   { const r = await fetch('/api/calib'); return r.json(); },
-  async setCalib(j) { return fetch('/api/calib', {method:'POST', body: JSON.stringify(j)}); },
-  async del(name) { return fetch('/api/photo/' + encodeURIComponent(name), {method:'DELETE'}); },
-  async show(name){ return fetch('/api/display/' + encodeURIComponent(name), {method:'POST'}); },
-  async next()    { return fetch('/api/next', {method:'POST'}); },
+  async list()    { const r = await fetchT('/api/list'); return r.json(); },
+  async cfg()     { const r = await fetchT('/api/config'); return r.json(); },
+  async setCfg(j) { return fetchT('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(j)}); },
+  async calib()   { const r = await fetchT('/api/calib'); return r.json(); },
+  async setCalib(j) { return fetchT('/api/calib', {method:'POST', body: JSON.stringify(j)}); },
+  async del(name) { return fetchT('/api/photo/' + encodeURIComponent(name), {method:'DELETE'}); },
+  async show(name){ return fetchT('/api/display/' + encodeURIComponent(name), {method:'POST'}); },
+  async next()    { return fetchT('/api/next', {method:'POST'}); },
   async upload(name, blob, mime) {
-    return fetch('/api/upload/' + encodeURIComponent(name),
-                 {method:'POST', headers:{'Content-Type': mime || 'application/octet-stream'}, body: blob});
+    return fetchT('/api/upload/' + encodeURIComponent(name),
+                 {method:'POST', headers:{'Content-Type': mime || 'application/octet-stream'}, body: blob},
+                 UPLOAD_TIMEOUT_MS);
   },
 };
 
@@ -2538,7 +2573,7 @@ async function loadWasm() {
   // copy that lacks the new exports (e.g. wasm_dither_15x).  Forcing
   // no-store on the *request* bypasses that stale entry even when the
   // browser hasn't yet honoured the new server-side no-store response.
-  const resp = await fetch('/dither.wasm', {cache: 'no-store'});
+  const resp = await fetchT('/dither.wasm', {cache: 'no-store'}, UPLOAD_TIMEOUT_MS);
   const bytes = await resp.arrayBuffer();
   // Closure for the wasi imports — fd_write needs the heap to report the
   // exact byte count back to the WASM side or libc spins forever waiting for
@@ -2584,6 +2619,8 @@ async function loadWasm() {
     getSpecularFloor: exports.wasm_get_specular_floor,
     setPaletteMode:   exports.wasm_set_palette_mode,
     getPaletteMode:   exports.wasm_get_palette_mode,
+    setColorRenderMode: exports.wasm_set_color_render_mode,
+    getColorRenderMode: exports.wasm_get_color_render_mode,
     dither:    exports.wasm_dither,
     dither15x: exports.wasm_dither_15x,
     ditherE6:  exports.wasm_dither_e6,
@@ -2670,7 +2707,8 @@ const CALIB_FALLBACK = {
   },
   "pipeline": {
     "ditherMode": "e6-mix",
-    "colorimetryMode": "legacy"
+    "colorimetryMode": "legacy",
+    "colorRenderMode": "6color"
   },
   "mixtures": {
     "version": 2,
@@ -3010,6 +3048,7 @@ function ensurePipelineConfig(c) {
   out.pipeline = out.pipeline || {};
   out.pipeline.ditherMode = normalizeDitherMode(out.pipeline.ditherMode);
   out.pipeline.colorimetryMode = normalizeColorimetryMode(out.pipeline.colorimetryMode);
+  out.pipeline.colorRenderMode = normalizeColorRenderMode(out.pipeline.colorRenderMode);
   return out;
 }
 
@@ -3027,6 +3066,32 @@ const COLORIMETRY_MODE_K = {
 
 function normalizeColorimetryMode(mode) {
   return COLORIMETRY_MODE_KEYS.includes(mode) ? mode : 'legacy';
+}
+
+// Effective colorimetry: Reflectance v2 targets the SPECULAR-CORRECTED (SCE)
+// measured Lab — what the eye sees through the AG glass (glare removed) — for
+// more accurate, richer colour than the raw colorimeter (SCI/legacy) reading,
+// which bakes in ~4% first-surface glare (lighter, washed). Only applied when
+// the user hasn't explicitly chosen a colorimetry mode, so the dropdown still
+// wins. SCE deepens blacks and lifts chroma; drop to 'sce-subtle' if shadow
+// detail crushes, or 'sce-off' to disable.
+function effectiveColorimetryMode() {
+  const set = normalizeColorimetryMode(calib && calib.pipeline && calib.pipeline.colorimetryMode);
+  const cr  = normalizeColorRenderMode(calib && calib.pipeline && calib.pipeline.colorRenderMode);
+  if (cr === 'reflectance' && set === 'legacy') return 'sce-default';
+  return set;
+}
+
+// Colour-rendering mode — mirror color_render_mode_t in color_pipeline.h.
+// '6color' (default) matches only the six primary inks (pre-29e9b69
+// behaviour); 'mixpatch' (experimental) also uses the 28-patch halftone-mix
+// calibration for richer colour. Only gates the dither's use of the mix
+// model — source Lab and the gamut map are untouched.
+const COLOR_RENDER_MODE_KEYS = ['6color', 'mixpatch', 'reflectance'];
+const COLOR_RENDER_MODE_TO_INT = { '6color': 0, 'mixpatch': 1, 'reflectance': 2 };
+
+function normalizeColorRenderMode(mode) {
+  return COLOR_RENDER_MODE_KEYS.includes(mode) ? mode : '6color';
 }
 
 function migrateCalibAdjustDefaults(c) {
@@ -3113,8 +3178,12 @@ async function loadCalib() {
 //      labApplySCE and COLORIMETRY_MODE_K.
 function pushPaletteToWasm() {
   if (!wasm || !calib) return;
-  const mode = normalizeColorimetryMode(calib.pipeline && calib.pipeline.colorimetryMode);
+  const mode = effectiveColorimetryMode();
   if (wasm.setPaletteMode) wasm.setPaletteMode(COLORIMETRY_MODE_TO_INT[mode] | 0);
+  if (wasm.setColorRenderMode) {
+    const crmode = normalizeColorRenderMode(calib.pipeline && calib.pipeline.colorRenderMode);
+    wasm.setColorRenderMode(COLOR_RENDER_MODE_TO_INT[crmode] | 0);
+  }
   const lab18 = new Float32Array(18);
   if (mode === 'legacy') {
     const rgbToLab = wasm.exports.wasm_rgb_to_lab;
@@ -3146,7 +3215,7 @@ function pushPaletteToWasm() {
 
 function pushMixPatchesToWasm() {
   if (!wasm || !calib || !wasm.clearMix || !wasm.setMixPatch) return;
-  const mode = normalizeColorimetryMode(calib.pipeline && calib.pipeline.colorimetryMode);
+  const mode = effectiveColorimetryMode();
   const tmpPtr = wasm.malloc(12);
   const tmp = new Float32Array(wasm.memory.buffer, tmpPtr, 3);
   let mixIdx = 0;
@@ -3463,7 +3532,7 @@ document.getElementById('btn-tune').onclick = async () => {
   if (!requireWasmOrShowSupport()) return;
   await withBusy(async () => {
   try {
-    const resp = await fetch(photoUrl(detailTarget, {noCache: true}), {cache: 'no-store'});
+    const resp = await fetchT(photoUrl(detailTarget, {noCache: true}), {cache: 'no-store'}, UPLOAD_TIMEOUT_MS);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const blob = await resp.blob();
     const bmp  = await createImageBitmap(blob);
@@ -3481,7 +3550,7 @@ document.getElementById('btn-tune').onclick = async () => {
     // now has the file.  That presented to the user as "save doesn't work".
     let preserveAdjust = false;
     try {
-      const sresp = await fetch('/api/photo/' + encodeURIComponent(base + '.json'),
+      const sresp = await fetchT('/api/photo/' + encodeURIComponent(base + '.json'),
                                 {cache: 'no-store'});
       if (sresp.ok) {
         const sidecar = await sresp.json();
@@ -3552,6 +3621,7 @@ const batteryIconToggle = document.getElementById('battery-icon-toggle');
 const batteryIconValue = document.getElementById('battery-icon-value');
 const ditherModeSelect = document.getElementById('dither-mode-select');
 const colorimetryModeSelect = document.getElementById('colorimetry-mode-select');
+const colorRenderModeSelect = document.getElementById('color-render-mode-select');
 const autoAeRange = document.getElementById('auto-ae-range');
 const autoAeValue = document.getElementById('auto-ae-value');
 const autoTempRange = document.getElementById('auto-temp-range');
@@ -3884,6 +3954,7 @@ function syncPipelineSettingControls() {
   calib = ensurePipelineConfig(calib);
   if (ditherModeSelect) ditherModeSelect.value = normalizeDitherMode(calib.pipeline.ditherMode);
   if (colorimetryModeSelect) colorimetryModeSelect.value = normalizeColorimetryMode(calib.pipeline.colorimetryMode);
+  if (colorRenderModeSelect) colorRenderModeSelect.value = normalizeColorRenderMode(calib.pipeline.colorRenderMode);
   if (autoAeRange) autoAeRange.value = calib.auto.exposureBias;
   if (autoTempRange) autoTempRange.value = calib.auto.temperatureBias;
   syncSettingsReadouts();
@@ -3898,6 +3969,9 @@ async function savePipelineSettings() {
   }
   if (colorimetryModeSelect) {
     calib.pipeline.colorimetryMode = normalizeColorimetryMode(colorimetryModeSelect.value);
+  }
+  if (colorRenderModeSelect) {
+    calib.pipeline.colorRenderMode = normalizeColorRenderMode(colorRenderModeSelect.value);
   }
   if (autoAeRange) calib.auto.exposureBias = Math.round(+autoAeRange.value);
   if (autoTempRange) calib.auto.temperatureBias = Math.round(+autoTempRange.value);
@@ -3917,6 +3991,7 @@ async function savePipelineSettings() {
 
 if (ditherModeSelect) ditherModeSelect.onchange = savePipelineSettings;
 if (colorimetryModeSelect) colorimetryModeSelect.onchange = savePipelineSettings;
+if (colorRenderModeSelect) colorRenderModeSelect.onchange = savePipelineSettings;
 if (autoAeRange) {
   autoAeRange.oninput = () => syncSettingsReadouts();
   autoAeRange.onchange = savePipelineSettings;
@@ -4273,6 +4348,7 @@ function analyzeCanvasForAuto(canvas) {
   const lP10  = percentileFromHist(histL, n, 0.10)  / 2.55;
   const lP50  = percentileFromHist(histL, n, 0.50)  / 2.55;
   const lP90  = percentileFromHist(histL, n, 0.90)  / 2.55;
+  const lP95  = percentileFromHist(histL, n, 0.95)  / 2.55;
   const lP98  = percentileFromHist(histL, n, 0.98)  / 2.55;
   const lP99  = percentileFromHist(histL, n, 0.99)  / 2.55;
   const lP998 = percentileFromHist(histL, n, 0.998) / 2.55;
@@ -4282,7 +4358,7 @@ function analyzeCanvasForAuto(canvas) {
   return {
     mean, std, edge: edgeAvg, chroma: chroma/n, saturation: satSum/n,
     p02, p10, p25, p50, p75, p90, p98,
-    lMean: sumL/n, lP02, lP10, lP50, lP90, lP98, lP99, lP998,
+    lMean: sumL/n, lP02, lP10, lP50, lP90, lP95, lP98, lP99, lP998,
     cMean: sumC/n, cP95, cP98,
     warm: warm/n, cool: cool/n, blue: blue/n, green: green/n, red: red/n, skin: skin/n, flat: flat/n,
     bright: bright/n, dark: dark/n, clipHi: clipHi/n, clipLo: clipLo/n,
@@ -4320,83 +4396,26 @@ function chooseAutoPreset(stats) {
 
 function autoIspExposureTone(base, scene, stats, autoCfg) {
   const key = scene.key;
-  // All targets and caps live in Lab L*, against the panel's actual gamut
-  // hull from the 34 measured calibration patches. Exposure → L* conversion
-  // uses stopsToReachL (an sRGB-gamma-aware approximation), since the
-  // C-pipeline applies exposure as a sRGB-domain multiplicative gain.
-  const g = stats.gamut;        // { lMin, lMax, cMaxHi, cMaxMid, cMaxLo, lRange }
 
-  // ---- Midtone target in L* ----
-  // Anchor source p50 to a fraction of the panel range. On reflective paper
-  // a midtone that's "perceptually middle gray" (L*≈50) is too dark — the
-  // viewer adapts to panel white as their reference, so we want p50 sitting
-  // in the upper-mid of the achievable [lMin, lMax] range. Document scenes
-  // push higher (the background must read as white), portraits/landscapes
-  // sit a bit lower to keep highlight headroom for skin / sky.
-  const midFrac = key === 'document' ? 0.80
-                : key === 'portrait' ? 0.66
-                : key === 'anime'    ? 0.68
-                : key === 'landscape'? 0.62
-                : 0.66;
-  const lTargetMid = g.lMin + g.lRange * midFrac;
-  const midExposure = stopsToReachL(stats.lP50, lTargetMid);
-
-  // ---- Highlight headroom caps in L* ----
-  // The panel can only render L* ≤ lMax. We aim p99 *below* the ceiling so
-  // the dither still has halftone room (real texture, not solid white);
-  // p99.8 is allowed to land near or just over the ceiling so a genuine
-  // specular glint still renders as solid white instead of grey.
-  const hiHeadroom = key === 'document' ? 1 : key === 'portrait' ? 5 : 3;
-  const lTargetP99  = g.lMax - hiHeadroom;
-  const lTargetP998 = g.lMax + 1.5;
-  const capMain = stopsToReachL(stats.lP99,  lTargetP99);
-  const capSpec = stopsToReachL(stats.lP998, lTargetP998);
-  let exposure = Math.min(midExposure, capMain, capSpec);
-
-  // ---- Spatial penalty: connected textureless-white blobs ----
-  // On reflective paper a big blown patch is the most destructive failure
-  // mode — the eye locks onto it. clipCoreL is computed in L* space against
-  // the panel ceiling, so it doesn't false-trigger on bright but in-gamut
-  // halftones.
-  const corePenalty = Math.min(30, Math.max(0, stats.clipCoreL - 0.005) * 380);
-  exposure -= corePenalty;
-
-  // ---- Saturated-colour highlight penalty (panel gamut, not sRGB) ----
-  // satClip counts pixels where source L*+C* exceeds the panel's high-L*
-  // chroma envelope (cMaxHi from the 34-point hull). The dither bleaches
-  // these to washed-out white-ish halftones. Pulling exposure down moves
-  // them into the L* range where the panel actually has chroma to spend.
-  if (stats.satClip > 0.02 && corePenalty < 10) {
-    exposure -= Math.min(14, (stats.satClip - 0.02) * 280);
-  }
-
-  // ---- Floor: don't crater clean low-key scenes ----
-  // The eye adapts on reflective media — going too dark is worse than a
-  // mildly hot highlight, because then everything sits near panel-black and
-  // the image looks lifeless. Cap downward AE pressure at ~1.8 stops.
-  exposure = Math.max(exposure, -180);
-
-  // ---- Recover lost midtones via downstream gamma + contrast ----
-  // When the highlight caps forced us below the midtone target, the image
-  // would render dim. Gamma is the last op before dither in the C pipeline,
-  // and its gain near the panel-white ceiling is ~1.0, so it lifts the
-  // shadow→mid range without re-blowing highlights. Contrast tightens the
-  // S-curve around 128 for perceived punch.
-  const headroomLoss = Math.max(0, midExposure - exposure);
-  base.gamma    += clampNum(Math.round(headroomLoss * 0.22), 0, 14);
-  base.contrast += clampNum(Math.round(headroomLoss * 0.18), 0, 12);
-
-  if (scene.lowKey && key !== 'document') exposure += 4;
+  // The v2 C dither maps source L* into the panel range with a display-referred
+  // power curve AND a cusp gamut-map that already caps chroma (so brightening
+  // can no longer BLEACH a colour — it just renders it as vivid as the gamut
+  // allows). So AE no longer needs the old midtone-target + p99/p99.8 caps minus
+  // stacked corePenalty/satClip penalties (that chain is exactly what cratered
+  // exposure dark and never actually fixed bleaching). AE's only job now is a
+  // robust AUTO-LEVEL: map the source's diffuse white (specular-rejected) to
+  // near sRGB white so the tone curve lands it at panel white — which fills the
+  // dynamic range and BRIGHTENS dark/under-exposed photos. Low-key scenes keep
+  // some darkness (don't wash out mood). One lever, no penalty stacking.
+  const wp = Math.min(stats.lP98, stats.lP95 + 6);
+  const whiteTarget = key === 'document' ? 99 : (scene.lowKey ? 82 : 92);
+  let exposure = stopsToReachL(wp, whiteTarget);
   exposure += autoCfg.exposureBias;
   base.exposure = Math.round(clampNum(exposure, -300, 300));
 
-  // ---- Legacy contrast/gamma scene adjustments (use Lab spread now) ----
-  // Source images with a narrow L* spread benefit from extra contrast on
-  // this panel — the dither can render the full panel range, so we want
-  // input to use that range too. Tuned against Lab spread (lP90 - lP10)
-  // instead of sRGB Y so it tracks perceived contrast, not luma.
-  const spreadBoost = Math.round((45 - stats.lSpread) * 0.42);
-  base.contrast += clampNum(spreadBoost, -10, 14);
+  // Scene contrast/gamma from Lab spread (unchanged — these are content shaping,
+  // not the exposure placement that was the problem).
+  base.contrast += clampNum(Math.round((45 - stats.lSpread) * 0.42), -10, 14);
   if (key === 'document') base.contrast += 6;
   if (key === 'portrait') base.contrast -= 3;
   base.gamma += clampNum(Math.round((48 - stats.lP50) * 0.22), -7, 9);
@@ -4985,21 +5004,60 @@ function applyExtraAdjustRgb888(buf, w, h, values = perImageAdjust) {
   }
 }
 
-function rgbFromIndexWeights(weights, n = opticalMixExponent()) {
-  const pal = calibratedPaletteRgb();
+// Panel forward model — MUST match the C dither (palette.c palette_mix_model_yn,
+// PALETTE_YN_N). Optical dot-mixing is linear in reflectance (XYZ), under a
+// Yule–Nielsen power law; doing it in gamma-encoded sRGB (the old model) made
+// the preview over-dark and disagree with the panel. This is the single
+// forward model now shared by the live preview, the AE scorer, and the dither,
+// so "what you see == what prints". n and the ink anchors come from calibration.
+const PANEL_YN_N = 1.4;   // == PALETTE_YN_N in palette.h
+
+function _labToXyz(L, a, b) {
+  const fy = (L + 16) / 116, fx = a / 500 + fy, fz = fy - b / 200;
+  const fi = t => { const t3 = t*t*t; return t3 > _LAB_EPS ? t3 : (t - 16/116) / 7.787; };
+  return [0.95047 * fi(fx), fi(fy), 1.08883 * fi(fz)];
+}
+function _xyzToSrgb(X, Y, Z) {
+  let r =  3.2406*X - 1.5372*Y - 0.4986*Z;
+  let g = -0.9689*X + 1.8758*Y + 0.0415*Z;
+  let b =  0.0557*X - 0.2040*Y + 1.0570*Z;
+  const enc = v => { v = v < 0 ? 0 : v > 1 ? 1 : v;
+    return v <= 0.0031308 ? 12.92*v : 1.055*Math.pow(v, 1/2.4) - 0.055; };
+  return [Math.round(enc(r)*255), Math.round(enc(g)*255), Math.round(enc(b)*255)];
+}
+
+// Per-ink pseudo-reflectance p = XYZ^(1/n), from the calibrated panel Lab.
+// Cached; rebuilt when the calibration palette changes.
+let _inkPCacheKey = null, _inkPCache = null;
+function panelInkReflectance() {
+  const key = calib ? JSON.stringify(calib.palette) : 'fallback';
+  if (key === _inkPCacheKey && _inkPCache) return _inkPCache;
+  const invn = 1 / PANEL_YN_N;
+  _inkPCache = paletteLabTable().map(lab => {
+    const xyz = _labToXyz(lab[0], lab[1], lab[2]);
+    return [Math.pow(Math.max(0, xyz[0]), invn),
+            Math.pow(Math.max(0, xyz[1]), invn),
+            Math.pow(Math.max(0, xyz[2]), invn)];
+  });
+  _inkPCacheKey = key;
+  return _inkPCache;
+}
+
+// Predicted on-panel appearance of a dot population. `n` is accepted for
+// call-site compatibility but the model is fixed to PANEL_YN_N to stay in
+// lockstep with the C dither.
+function rgbFromIndexWeights(weights, n = PANEL_YN_N) {
+  const P = panelInkReflectance();
   let total = 0;
   for (const v of weights) total += v || 0;
   if (total <= 0) return [128, 128, 128];
-  const out = [0, 0, 0];
-  for (let i = 0; i < PALETTE_ORDER.length; i++) {
+  let X = 0, Y = 0, Z = 0;
+  for (let i = 0; i < P.length; i++) {
     const f = (weights[i] || 0) / total;
     if (f <= 0) continue;
-    const rgb = pal[i] || [128,128,128];
-    for (let ch = 0; ch < 3; ch++) {
-      out[ch] += f * Math.pow(Math.max(0, rgb[ch]) / 255, 1 / n);
-    }
+    X += f * P[i][0]; Y += f * P[i][1]; Z += f * P[i][2];
   }
-  return out.map(v => clampInt(Math.pow(Math.max(0, v), n) * 255, 0, 255));
+  return _xyzToSrgb(Math.pow(X, PANEL_YN_N), Math.pow(Y, PANEL_YN_N), Math.pow(Z, PANEL_YN_N));
 }
 
 function opticalLumaFromIndices(indices, w, h) {
@@ -5454,6 +5512,9 @@ function openUpload(srcBitmap, opts) {
   // Reflect the current colorimetry mode in the Experimental dropdown.
   if (colorimetryModeSelect && calib) {
     colorimetryModeSelect.value = normalizeColorimetryMode(calib.pipeline && calib.pipeline.colorimetryMode);
+  }
+  if (colorRenderModeSelect && calib) {
+    colorRenderModeSelect.value = normalizeColorRenderMode(calib.pipeline && calib.pipeline.colorRenderMode);
   }
   uploadSheet.classList.add('is-open');
   setUploadStep('crop');
@@ -6163,7 +6224,7 @@ btnCalibShow.onclick = async () => {
     btnCalibShow.disabled = true;
     calibActionHint.textContent = tr('calib.sent');
     const mix = mixQueryForTarget(target);
-    const r = await fetch('/api/calib-mix?mix=' + mix, {method: 'POST'});
+    const r = await fetchT('/api/calib-mix?mix=' + mix, {method: 'POST'});
     if (!r.ok) throw new Error('HTTP ' + r.status);
   } catch (e) {
     calibActionHint.textContent = tr('calib.sendFailed', {message: e.message});

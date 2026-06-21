@@ -1,7 +1,8 @@
 // pm1.c — minimal M5PM1 PMIC driver.  Talks to the chip at I2C 0x6E and
-// configures the GPIO mode + output registers for board load switches.  SD is
-// powered for storage; EPD/RGB are normally kept off and enabled on demand.
-// SD card presence is not detected through the PMIC;
+// configures the GPIO mode + output registers for board load switches.  The SD
+// and EPD rails share one SPI bus, so they are powered together for the whole
+// awake session and dropped together at deep sleep; RGB is kept off and enabled
+// on demand.  SD card presence is not detected through the PMIC;
 // the SD driver tries to initialize the card directly. All other PMIC
 // features are left mostly untouched; deep-sleep entry explicitly shuts down
 // the external rails that are safe to remove.
@@ -199,12 +200,14 @@ int pm1_init(void)
         return -1;
     }
 
-    // GPIO_OUT: keep SD powered, but leave the EPD load switch off.  The
-    // display worker powers the panel only for the refresh window.
+    // GPIO_OUT: power the EPD and SD rails together.  They share one SPI bus,
+    // so a mixed power state (one rail on, the other off) lets the unpowered
+    // chip load/back-power the shared lines and corrupts traffic for whichever
+    // device is active.  Both rails stay up for the whole awake session; deep
+    // sleep drops them together (pm1_prepare_deep_sleep).
     uint8_t out = 0;
     (void)pm1_read_reg(PM1_REG_GPIO_OUT, &out);
-    out &= ~(1 << PM1_PYG0);
-    out |= (1 << PM1_PYG3);
+    out |= PM1_RAIL_BITS;
     if (pm1_write_reg(PM1_REG_GPIO_OUT, out) != 0) {
         ESP_LOGE(TAG, "M5PM1 GPIO_OUT write failed at I2C 0x%02x", PM1_I2C_ADDR);
         return -1;
@@ -213,7 +216,7 @@ int pm1_init(void)
     pm1_set_rgb_power(false);
     pm1_set_boost_power(false);
 
-    ESP_LOGI(TAG, "rails: PYG0(EPD)=0 PYG3(SD)=1 "
+    ESP_LOGI(TAG, "rails: PYG0(EPD)=1 PYG3(SD)=1 "
                   "(mode=0x%02x out=0x%02x drv=0x%02x)", mode, out, drv);
 
     // SD spec allows up to 250 ms from power-good to ready for the first

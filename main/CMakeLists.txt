@@ -11,7 +11,6 @@ idf_component_register(
     SRCS
         "main.c"
         "epd_4in0e.c"
-        "epd_probe.c"
         "sd_storage.c"
         "image_loader.c"
         "color_pipeline.c"

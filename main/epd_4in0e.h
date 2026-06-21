@@ -21,7 +21,9 @@ int  epd_init(bool bus_already_inited);
 
 // Push a full 4-bit framebuffer (size = EPD_4IN0E_WIDTH/2 * EPD_4IN0E_HEIGHT
 // = 120000 bytes) to the panel and trigger the refresh.
-void epd_display(const uint8_t *fb);
+// Returns 0 on success, -1 if the panel's BUSY line never released (a wedged
+// controller) — the caller should attempt a power-cycle recovery.
+int epd_display(const uint8_t *fb);
 
 // Fill the entire panel with a single 4-bit ink code (0..6).
 void epd_clear(uint8_t ink_code);
